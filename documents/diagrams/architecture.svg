@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE svg
+  PUBLIC '-//W3C//DTD SVG 1.0//EN'
+  'http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd'>
+<svg width="490" height="305" preserveAspectRatio="xMinYMin meet" viewBox="0 0 490 305" xmlns="http://www.w3.org/2000/svg" version="1.0" fill-rule="evenodd" xmlns:xlink="http://www.w3.org/1999/xlink">
+	<title>...</title>
+	<desc>...</desc>
+	<clipPath id="clip">
+		<rect x="0" y="0" width="490" height="305"/>
+	</clipPath>
+	<g id="group" transform="scale(1,-1) translate(0,-305)" style="clip-path: url(#clip)">
+		<g transform="">
+			<rect x="165" y="250" width="160" height="40" rx="4" ry="4" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 0.8; fill: rgb(92%,95%,96%); fill-rule: evenodd;"/>
+			<text x="228.4675" y="276.0" style="font-family: Helvetica; font-size: 8.5px;fill: rgb(9%,23%,34%); stroke:none;" transform="translate(0,552) scale(1,-1)">React UI</text>
+			<text x="196.57975" y="264.0" style="font-family: Helvetica; font-size: 8.5px;fill: rgb(9%,23%,34%); stroke:none;" transform="translate(0,528) scale(1,-1)">Browser / sessionStorage</text>
+			<rect x="165" y="175" width="160" height="45" rx="4" ry="4" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 0.8; fill: rgb(92%,95%,96%); fill-rule: evenodd;"/>
+			<text x="215.47525" y="203.5" style="font-family: Helvetica; font-size: 8.5px;fill: rgb(9%,23%,34%); stroke:none;" transform="translate(0,407) scale(1,-1)">FastAPI routers</text>
+			<text x="190.42575" y="191.5" style="font-family: Helvetica; font-size: 8.5px;fill: rgb(9%,23%,34%); stroke:none;" transform="translate(0,383) scale(1,-1)">Validation and authentication</text>
+			<rect x="5" y="103" width="150" height="40" rx="4" ry="4" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 0.8; fill: rgb(92%,95%,96%); fill-rule: evenodd;"/>
+			<text x="56.1405" y="123.0" style="font-family: Helvetica; font-size: 8.5px;fill: rgb(9%,23%,34%); stroke:none;" transform="translate(0,246) scale(1,-1)">Auth / profile</text>
+			<path d="M 245,175 L 80,143 Z" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 0.9;"/>
+			<polygon points="80 143, 85.87013 141.7584, 84.98043 146.3459" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,23%,34%); fill-rule: evenodd;"/>
+			<rect x="170" y="103" width="150" height="40" rx="4" ry="4" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 0.8; fill: rgb(92%,95%,96%); fill-rule: evenodd;"/>
+			<text x="209.80575" y="123.0" style="font-family: Helvetica; font-size: 8.5px;fill: rgb(9%,23%,34%); stroke:none;" transform="translate(0,246) scale(1,-1)">Listings / matching</text>
+			<path d="M 245,175 L 245,143 Z" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 0.9;"/>
+			<polygon points="245 143, 247.3365 148.5264, 242.6635 148.5264" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,23%,34%); fill-rule: evenodd;"/>
+			<rect x="335" y="103" width="150" height="40" rx="4" ry="4" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 0.8; fill: rgb(92%,95%,96%); fill-rule: evenodd;"/>
+			<text x="375.983" y="123.0" style="font-family: Helvetica; font-size: 8.5px;fill: rgb(9%,23%,34%); stroke:none;" transform="translate(0,246) scale(1,-1)">Exchange / admin</text>
+			<path d="M 245,175 L 410,143 Z" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 0.9;"/>
+			<polygon points="410 143, 405.0196 146.3459, 404.1299 141.7584" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,23%,34%); fill-rule: evenodd;"/>
+			<rect x="165" y="18" width="160" height="45" rx="4" ry="4" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 0.8; fill: rgb(92%,95%,96%); fill-rule: evenodd;"/>
+			<text x="193.0395" y="46.5" style="font-family: Helvetica; font-size: 8.5px;fill: rgb(9%,23%,34%); stroke:none;" transform="translate(0,93) scale(1,-1)">Repositories / SQLAlchemy</text>
+			<text x="193.9745" y="34.5" style="font-family: Helvetica; font-size: 8.5px;fill: rgb(9%,23%,34%); stroke:none;" transform="translate(0,69) scale(1,-1)">PostgreSQL relational data</text>
+			<path d="M 245,250 L 245,220 Z" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 0.9;"/>
+			<polygon points="245 220, 247.3365 225.5264, 242.6635 225.5264" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,23%,34%); fill-rule: evenodd;"/>
+			<text x="222.22" y="241.0" style="font-family: Times-Roman; font-size: 8px;fill: rgb(9%,23%,34%); stroke:none;" transform="translate(0,482) scale(1,-1)">HTTPS JSON</text>
+			<path d="M 80,103 L 245,63 Z" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 0.9;"/>
+			<polygon points="245 63, 240.1797 66.57275, 239.0787 62.03127" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,23%,34%); fill-rule: evenodd;"/>
+			<path d="M 245,103 L 245,63 Z" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 0.9;"/>
+			<polygon points="245 63, 247.3365 68.52637, 242.6635 68.52637" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,23%,34%); fill-rule: evenodd;"/>
+			<path d="M 410,103 L 245,63 Z" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 0.9;"/>
+			<polygon points="245 63, 250.9213 62.03127, 249.8203 66.57275" style="stroke: rgb(9%,23%,34%); stroke-linecap: butt; stroke-width: 1; fill: rgb(9%,23%,34%); fill-rule: evenodd;"/>
+		</g>
+	</g>
+</svg>

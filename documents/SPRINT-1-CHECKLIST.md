@@ -1,0 +1,68 @@
+# Book Exchange Platform Sprint 1 checklist
+
+Dates follow the TA announcement: Sprint 1 is 27–31 October 2026; Sprint 2 is 2–7 November 2026; presentations start 9 November 2026. Finish implementation by 30 October where possible and use 31 October as a buffer and review day.
+
+## Submission gate for 27 October
+
+- [ ] Complete and review the project-specific SRS, SAD and Software Test Plan. The supplied PDFs are ATM examples and are not final Book Exchange deliverables.
+- [ ] Use the existing team repository: https://github.com/Nishkal00/Book-Exchange-Platform . Do not create a second repository.
+- [ ] Put the three final deliverables in `documents/`, with editable sources where available.
+- [ ] Submit that repository link in the team's row of the TA spreadsheet, once only.
+- [ ] Ensure the TA can access the repository and all three documents.
+- [ ] Complete submission before starting Sprint 1, as the announcement requires.
+
+## Team setup for 27 October
+
+Final user-confirmed assignment overrides the updated PDF role labels: Nishkal handles DevOps and repo/Jira setup; Abhiram handles Auth. Manoj handles Listings and Ravish handles UI/docs/demo.
+
+- [ ] Invite Abhiram, Manoj and Ravish to the repository and Jira project using verified account identities.
+- [ ] Create Sprint 1 for 27–31 October and Sprint 2 for 2–7 November. Start only Sprint 1 today after submission; leave Sprint 2 planned.
+- [ ] Create Auth, Listings, Requests & Matching, Exchange, Admin and DevOps epics.
+- [ ] Create the 17 Sprint 1 and 14 Sprint 2 stories from JIRA-BACKLOG.md, with their grouped requirement IDs, acceptance criteria, owner and exact estimates. Tests stay inside feature stories.
+- [ ] Add DevOps, UI and testing tasks with owners and estimates; avoid counting the same effort in both parent and child estimates.
+- [ ] Use the board workflow To Do → In Progress → In Review → Done. Confirm the Done column represents completed work for the burndown.
+- [ ] Establish estimates before starting the sprint. Update status and remaining work honestly each day; do not mark planned tests as passed.
+- [ ] Protect main with one independent PR approval and passing CI. Required CI checks must refer to checks that actually exist and run.
+- [ ] Everyone accepts invitations, clones the repository and reads SRS sections 4–5 and SAD sections 3 and 4.3.
+- [ ] Use `BEP-<jira-number>-short-name` branches if BEP is the actual Jira project key, and reference the issue in each PR. Use PR merges for main, including scaffold changes; the plan's separate instruction to push the scaffold directly to main conflicts with its PR-only rule.
+
+## Wednesday 28 October
+
+| Owner | Work | Evidence |
+| --- | --- | --- |
+| Nishkal | Scaffold FastAPI backend, React frontend, tests and Docker Compose with Postgres. Add Alembic migrations for users, books and listings and enable pg_trgm. Add lint, pytest with >=70% coverage, Docker build and an explicitly identified deployment placeholder. | Reviewed PR; successful actual build and tests. A placeholder is not deployment evidence. |
+| Abhiram | Registration with configured university domain, duplicate-email 409 and bcrypt password hashing. | TC-AUTH-01/02 and TC-SEC-01. |
+| Manoj | Book/listing models and repositories, parameterized queries, create listing with validation and ISBN-based book upsert. | TC-LST-01/02. |
+| Ravish | Vite app, routes, Axios client, navbar and responsive layout from 360px; begin registration/login pages. | Working UI and validation checks. |
+
+## Thursday 29 October
+
+| Owner | Work | Evidence |
+| --- | --- | --- |
+| Nishkal | Review teammates' PRs; configure HTTPS deployment and real deployment stage; add /health and setup instructions. | Passing CI and reachable deployment health check. |
+| Abhiram | Login, 30-minute JWT and rate limiting: sixth failed attempt within 15 minutes returns 429. | TC-AUTH-03/04 and TC-SEC-02/06. |
+| Manoj | Browse/search with q, ISBN and location filters, pagination, ISBN index and title trigram index. | TC-LST-03/04. |
+| Ravish | Finish auth pages and error handling for 401/429; build browse/search, pagination and empty state. | Integrated browser checks. |
+
+## Friday 30 October
+
+| Owner | Work | Evidence |
+| --- | --- | --- |
+| Nishkal | Complete deployment pipeline, independent reviews and README with docker compose up. | Green main build; documented setup and deployed URL. |
+| Abhiram | Logout/expiry and GET/PUT /users/me. | TC-AUTH-05/06 and TC-PRF-01. |
+| Manoj | Owner-only update/delete; soft delete; reject delete during active exchange; seed 10,000 listings and run Locust. | TC-LST-05/06/07, TC-SEC-04/05 and TC-PERF-01. |
+| Ravish | My Listings and Profile pages; manual responsive test; RTM and deviations; record one-minute demo. | TC-UX-01; verified RTM statuses; documents/DEVIATIONS.md; demo/sprint1.mp4. |
+
+## Friday 30 through Saturday 31 October
+
+- [ ] Merge reviewed work and verify CI on main.
+- [ ] Run docker compose up on a clean machine and record TC-PORT-01 results.
+- [ ] Verify deployed registration → login → create listing → search.
+- [ ] Update RTM only for tests actually executed and passed; define status codes consistently in SRS and Test Plan.
+- [ ] Check Sprint 2 backlog assignments for requests, matching, exchanges, ratings and admin.
+- [ ] Review unfinished work honestly and move it to an appropriate future sprint/backlog when closing Sprint 1.
+- [ ] Close Sprint 1 on 31 October and save burndown evidence in documents/.
+
+## Items needed before external completion
+
+Repository and Jira board links are known; roles are confirmed and the three deliverables are prepared locally. Authenticated browser access, verified teammate account identifiers, and the TA spreadsheet link/team row are still needed. Repository upload, Jira changes and submission must be verified separately; this checklist does not claim they have happened.
