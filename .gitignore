@@ -21,3 +21,4 @@ Thumbs.db
 # Local authoring and upload intermediates
 tmp/
 output/
+".fuse_hidden*" 
