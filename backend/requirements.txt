@@ -6,3 +6,4 @@ psycopg[binary]==3.3.6
 pydantic-settings==2.15.0
 
 bcrypt==4.2.1
+PyJWT==2.10.1

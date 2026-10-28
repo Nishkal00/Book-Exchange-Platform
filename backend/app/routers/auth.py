@@ -1,6 +1,9 @@
+
 import re
+from datetime import datetime, timedelta, timezone
 
 import bcrypt
+import jwt
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -44,6 +47,21 @@ class RegisterRequest(BaseModel):
         return value
 
 
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=1)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
+            raise ValueError("Enter a valid email address")
+        return value
+
+
 class UserOut(BaseModel):
     id: int
     name: str
@@ -53,6 +71,13 @@ class UserOut(BaseModel):
     location: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserOut
 
 
 def error_response(status_code: int, code: str, message: str):
@@ -65,12 +90,11 @@ def error_response(status_code: int, code: str, message: str):
 @router.post("/register", status_code=201, response_model=UserOut)
 def register(
     payload: RegisterRequest,
-    db: Session = Depends(get_db),  # noqa: B008
+    db: Session = Depends(get_db),
 ):
     settings = get_settings()
     allowed_domains = settings.allowed_email_domain_list
 
-    # Do not accept registrations until the approved domains are configured.
     if not allowed_domains:
         return error_response(
             503,
@@ -86,7 +110,10 @@ def register(
             "Email domain is not approved for registration.",
         )
 
-    existing = db.scalar(select(User).where(User.email == payload.email))
+    existing = db.scalar(
+        select(User).where(User.email == payload.email)
+    )
+
     if existing:
         return error_response(
             409,
@@ -105,6 +132,7 @@ def register(
         password_hash=password_hash,
         role="student",
     )
+
     db.add(user)
 
     try:
@@ -119,3 +147,60 @@ def register(
         )
 
     return user
+
+
+@router.post("/login", response_model=LoginResponse)
+def login(
+    payload: LoginRequest,
+    db: Session = Depends(get_db),
+):
+    settings = get_settings()
+
+    user = db.scalar(
+        select(User).where(User.email == payload.email)
+    )
+
+    # Return the same error for an unknown email and wrong password.
+    if user is None or not user.active:
+        return error_response(
+            401,
+            "INVALID_CREDENTIALS",
+            "Invalid email or password.",
+        )
+
+    try:
+        password_matches = bcrypt.checkpw(
+            payload.password.encode("utf-8"),
+            user.password_hash.encode("utf-8"),
+        )
+    except (ValueError, TypeError):
+        password_matches = False
+
+    if not password_matches:
+        return error_response(
+            401,
+            "INVALID_CREDENTIALS",
+            "Invalid email or password.",
+        )
+
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.jwt_expire_minutes
+    )
+
+    access_token = jwt.encode(
+        {
+            "sub": str(user.id),
+            "email": user.email,
+            "role": user.role,
+            "exp": expires_at,
+        },
+        settings.jwt_secret,
+        algorithm="HS256",
+    )
+
+    return LoginResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=settings.jwt_expire_minutes * 60,
+        user=UserOut.model_validate(user),
+    )
