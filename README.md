@@ -36,7 +36,31 @@ These roles reflect the confirmed swap and override the names in the supplied ta
 
 Use branches `BEP-<issue-number>-short-name`. Include the real Jira key in the PR title. Require one independent approval and passing required CI; do not approve your own work. Move work through To Do → In Progress → In Review → Done and retain test evidence.
 
-## Planned setup
+## Run locally
 
-The 28 October scaffold will provide FastAPI, React/Vite, PostgreSQL and Docker Compose. The intended startup is `docker compose up --build` after configuring a local `.env` from `.env.example`. This command is not yet runnable in this documentation-only baseline. Do not commit credentials or claim a deployment URL until it is verified.
+```bash
+cp .env.example .env
+docker compose up --build
+```
 
+- Frontend: http://localhost:5173
+- API: http://localhost:8000 (health check: `/health`, interactive docs: `/docs`)
+- The backend applies database migrations on start.
+
+Backend development without Docker (Python 3.11, a local PostgreSQL 15 with `pg_trgm`):
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+alembic upgrade head
+pytest            # fails if coverage drops below 70%
+ruff check . && ruff format --check .
+```
+
+Frontend: `cd frontend && npm ci && npm run dev`.
+
+## CI
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every pull request and on pushes to `main`: Ruff lint, pytest with a 70% coverage gate, Alembic upgrade/downgrade against PostgreSQL, the frontend build, and Docker image builds. The `deploy` job is a labelled placeholder until BEP-9 adds a real deployment. Do not commit credentials or claim a deployment URL until it is verified.
+
+The team maintains only this repository.
