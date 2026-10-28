@@ -40,4 +40,3 @@ Use branches `BEP-<issue-number>-short-name`. Include the real Jira key in the P
 
 The 28 October scaffold will provide FastAPI, React/Vite, PostgreSQL and Docker Compose. The intended startup is `docker compose up --build` after configuring a local `.env` from `.env.example`. This command is not yet runnable in this documentation-only baseline. Do not commit credentials or claim a deployment URL until it is verified.
 
-The team maintains only this repository. The TA spreadsheet link is pending.
