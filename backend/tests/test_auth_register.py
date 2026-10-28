@@ -1,4 +1,3 @@
-
 import bcrypt
 from fastapi.testclient import TestClient
 
@@ -49,9 +48,7 @@ def test_registration_success(db, monkeypatch):
         assert "password_hash" not in body
 
         # Verify the password is stored as a bcrypt hash.
-        user = db.query(User).filter_by(
-            email="student@example.edu"
-        ).one()
+        user = db.query(User).filter_by(email="student@example.edu").one()
 
         assert user.password_hash != "SecurePass123"
         assert bcrypt.checkpw(
@@ -86,10 +83,7 @@ def test_registration_rejects_unapproved_domain(db, monkeypatch):
         )
 
         assert response.status_code == 400
-        assert (
-            response.json()["error"]["code"]
-            == "INVALID_EMAIL_DOMAIN"
-        )
+        assert response.json()["error"]["code"] == "INVALID_EMAIL_DOMAIN"
 
     finally:
         app.dependency_overrides.clear()
