@@ -64,7 +64,10 @@ def error_response(status_code: int, code: str, message: str):
 
 
 @router.post("/register", status_code=201, response_model=UserOut)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+def register(
+    payload: RegisterRequest,
+    db: Session = Depends(get_db),  # noqa: B008
+):
     settings = get_settings()
     allowed_domains = settings.allowed_email_domain_list
 
