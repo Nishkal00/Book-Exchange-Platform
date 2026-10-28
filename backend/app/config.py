@@ -13,11 +13,19 @@ class Settings(BaseSettings):
     # Used by the Auth module (Sprint 1, BEP-10/11). Never commit a real secret.
     jwt_secret: str = "change-me-in-env"
     jwt_expire_minutes: int = 30
-    allowed_email_domain: str = ""
+    allowed_email_domains: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def allowed_email_domain_list(self) -> list[str]:
+        return [
+            domain.strip().lower().lstrip("@")
+            for domain in self.allowed_email_domains.split(",")
+            if domain.strip()
+        ]
 
 
 @lru_cache
