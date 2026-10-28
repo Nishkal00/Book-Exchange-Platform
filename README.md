@@ -4,11 +4,11 @@ A peer-to-peer student book lending and borrowing platform with authenticated li
 
 ## Submission documents
 
-| Deliverable | PDF | Editable source |
-| --- | --- | --- |
-| Software Requirements Specification | [SRS](documents/SRS.pdf) | [SRS source](documents/SRS.md) |
-| Software Architecture and Design | [SAD](documents/SAD.pdf) | [SAD source](documents/SAD.md) |
-| Software Test Plan | [Test Plan](documents/Test_Plan.pdf) | [Test Plan source](documents/Test_Plan.md) |
+| Deliverable | PDF |
+| --- | --- |
+| Software Requirements Specification | [SRS](documents/SRS.pdf) |
+| Software Architecture and Design | [SAD](documents/SAD.pdf) |
+| Software Test Plan | [Test Plan](documents/Test_Plan.pdf) |
 
 The documents form the initial project baseline. Implementation, CI runs and test execution are pending; no test is represented as passed.
 
@@ -30,7 +30,7 @@ These roles reflect the confirmed swap and override the names in the supplied ta
 - Sprint 2: 2-7 November 2026.
 - Presentations: from 9 November 2026.
 
-[Jira backlog](https://nishkalmr321.atlassian.net/jira/software/projects/BEP/boards/3/backlog) · [Sprint checklist](documents/SPRINT-1-CHECKLIST.md) · [Prepared backlog](documents/JIRA-BACKLOG.md) · [Current setup status](documents/TODAY.md)
+[Jira backlog](https://nishkalmr321.atlassian.net/jira/software/projects/BEP/boards/3/backlog)
 
 ## Development workflow
 

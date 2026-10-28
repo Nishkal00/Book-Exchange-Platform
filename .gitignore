@@ -22,3 +22,4 @@ Thumbs.db
 tmp/
 output/
 ".fuse_hidden*" 
+-e "documents/*\n!documents/SRS.pdf\n!documents/SAD.pdf\n!documents/Test_Plan.pdf\n.fuse_hidden*" 
