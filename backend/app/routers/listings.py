@@ -1,10 +1,10 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 
 from app.database import get_db
 from app.models import Book, Listing, User
@@ -86,6 +86,30 @@ class ListingOut(BaseModel):
         return self.created_at
 
 
+class PaginatedListingsOut(BaseModel):
+    """Paginated collection of listings (SAD 4.3, F-011)."""
+
+    items: list[ListingOut]
+    page: int
+    size: int
+    total: int
+
+
+def serialize_listing(listing: Listing) -> ListingOut:
+    """Helper to convert a Listing model instance with joined Book to ListingOut."""
+    return ListingOut(
+        id=listing.id,
+        title=listing.book.title,
+        author=listing.book.author,
+        isbn=listing.book.isbn,
+        condition=RANK_TO_CONDITION.get(listing.condition_rank, "UNKNOWN"),
+        location=listing.location,
+        status=listing.status,
+        owner_id=listing.owner_id,
+        created_at=listing.created_at,
+    )
+
+
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=ListingOut)
 def create_listing(
     payload: CreateListingRequest,
@@ -142,4 +166,110 @@ def create_listing(
         status=listing.status,
         owner_id=listing.owner_id,
         created_at=listing.created_at,
+    )
+
+
+@router.get("/mine", response_model=PaginatedListingsOut)
+def get_my_listings(
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> PaginatedListingsOut:
+    """Return the authenticated caller's non-deleted listings, including unavailable ones (F-011).
+
+    Declared before /{id} to prevent path parameter shadowing (SAD 4.3).
+    """
+    stmt = (
+        select(Listing)
+        .join(Listing.book)
+        .where(
+            Listing.owner_id == current_user.id,
+            Listing.deleted_at.is_(None),
+        )
+    )
+
+    total = db.scalar(select(func.count()).select_from(stmt.order_by(None).subquery())) or 0
+
+    paginated_stmt = (
+        stmt.options(contains_eager(Listing.book))
+        .order_by(Listing.created_at.desc(), Listing.id.asc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    listings = db.scalars(paginated_stmt).all()
+
+    items = [serialize_listing(item) for item in listings]
+
+    return PaginatedListingsOut(
+        items=items,
+        page=page,
+        size=size,
+        total=total,
+    )
+
+
+@router.get("", response_model=PaginatedListingsOut)
+def search_listings(
+    q: str | None = None,
+    isbn: str | None = None,
+    location: str | None = None,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),  # noqa: B008
+) -> PaginatedListingsOut:
+    """Publicly search AVAILABLE, non-deleted listings (F-011).
+
+    Filters by title/author q, ISBN, and location with pagination.
+    """
+    stmt = (
+        select(Listing)
+        .join(Listing.book)
+        .where(
+            Listing.status == "AVAILABLE",
+            Listing.deleted_at.is_(None),
+        )
+    )
+
+    if q is not None and q.strip():
+        q_clean = q.strip()
+        stmt = stmt.where(
+            or_(
+                Book.title.icontains(q_clean, autoescape=True),
+                Book.author.icontains(q_clean, autoescape=True),
+            )
+        )
+
+    if isbn is not None and isbn.strip():
+        isbn_raw = isbn.strip()
+        isbn_norm = isbn_raw.replace("-", "")
+        stmt = stmt.where(
+            or_(
+                Book.isbn == isbn_norm,
+                Book.isbn == isbn_raw,
+                Book.isbn.icontains(isbn_norm, autoescape=True),
+            )
+        )
+
+    if location is not None and location.strip():
+        loc_clean = location.strip()
+        stmt = stmt.where(Listing.location.icontains(loc_clean, autoescape=True))
+
+    total = db.scalar(select(func.count()).select_from(stmt.order_by(None).subquery())) or 0
+
+    paginated_stmt = (
+        stmt.options(contains_eager(Listing.book))
+        .order_by(Listing.created_at.desc(), Listing.id.asc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    listings = db.scalars(paginated_stmt).all()
+
+    items = [serialize_listing(item) for item in listings]
+
+    return PaginatedListingsOut(
+        items=items,
+        page=page,
+        size=size,
+        total=total,
     )
