@@ -77,8 +77,10 @@ class UserOut(BaseModel):
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    expires_in: int
+    expiresIn: int
     user: UserOut
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 def error_response(status_code: int, code: str, message: str):
@@ -197,7 +199,7 @@ def login(
     return LoginResponse(
         access_token=access_token,
         token_type="bearer",
-        expires_in=settings.jwt_expire_minutes * 60,
+        expiresIn=settings.jwt_expire_minutes * 60,
         user=UserOut.model_validate(user),
     )
 
@@ -220,7 +222,7 @@ def get_current_user(
             credentials.credentials,
             settings.jwt_secret,
             algorithms=["HS256"],
-            options={"require": ["exp", "sub"]},
+            options={"require": ["exp", "sub", "ver"]},
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(
@@ -261,7 +263,7 @@ def get_current_user(
         )
 
     token_ver = payload.get("ver")
-    if token_ver is not None and token_ver != user.token_version:
+    if token_ver is None or token_ver != user.token_version:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has been revoked",
