@@ -3,9 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.routers.auth import router as auth_router
+from app.routers.listings import router as listings_router
 
 app = FastAPI(title="Book Exchange Platform API", version="0.1.0")
 app.include_router(auth_router)
+app.include_router(listings_router)
 
 app.add_middleware(
     CORSMiddleware,
