@@ -1,6 +1,6 @@
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
@@ -90,7 +90,7 @@ def error_response(status_code: int, code: str, message: str):
 @router.post("/register", status_code=201, response_model=UserOut)
 def register(
     payload: RegisterRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # noqa: B008
 ):
     settings = get_settings()
     allowed_domains = settings.allowed_email_domain_list
@@ -152,7 +152,7 @@ def register(
 @router.post("/login", response_model=LoginResponse)
 def login(
     payload: LoginRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # noqa: B008
 ):
     settings = get_settings()
 
@@ -183,7 +183,7 @@ def login(
             "Invalid email or password.",
         )
 
-    expires_at = datetime.now(timezone.utc) + timedelta(
+    expires_at = datetime.now(UTC) + timedelta(
         minutes=settings.jwt_expire_minutes
     )
 
