@@ -1,11 +1,11 @@
+
 import re
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -16,7 +16,6 @@ from app.database import get_db
 from app.models import User
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
-security = HTTPBearer(auto_error=False)
 
 
 class RegisterRequest(BaseModel):
@@ -111,7 +110,9 @@ def register(
             "Email domain is not approved for registration.",
         )
 
-    existing = db.scalar(select(User).where(User.email == payload.email))
+    existing = db.scalar(
+        select(User).where(User.email == payload.email)
+    )
 
     if existing:
         return error_response(
@@ -155,7 +156,9 @@ def login(
 ):
     settings = get_settings()
 
-    user = db.scalar(select(User).where(User.email == payload.email))
+    user = db.scalar(
+        select(User).where(User.email == payload.email)
+    )
 
     # Return the same error for an unknown email and wrong password.
     if user is None or not user.active:
@@ -180,14 +183,15 @@ def login(
             "Invalid email or password.",
         )
 
-    expires_at = datetime.now(UTC) + timedelta(minutes=settings.jwt_expire_minutes)
+    expires_at = datetime.now(UTC) + timedelta(
+        minutes=settings.jwt_expire_minutes
+    )
 
     access_token = jwt.encode(
         {
             "sub": str(user.id),
             "email": user.email,
             "role": user.role,
-            "ver": user.token_version,
             "exp": expires_at,
         },
         settings.jwt_secret,
@@ -200,72 +204,3 @@ def login(
         expires_in=settings.jwt_expire_minutes * 60,
         user=UserOut.model_validate(user),
     )
-
-
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),  # noqa: B008
-    db: Session = Depends(get_db),  # noqa: B008
-) -> User:
-    """Validate Bearer JWT and return the authenticated active user (SR-002)."""
-    if not credentials or credentials.scheme.lower() != "bearer":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    settings = get_settings()
-    try:
-        payload = jwt.decode(
-            credentials.credentials,
-            settings.jwt_secret,
-            algorithms=["HS256"],
-            options={"require": ["exp", "sub"]},
-        )
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
-    except jwt.PyJWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token signature or payload",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
-
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token missing subject claim",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    try:
-        user_id_int = int(user_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid user ID in token",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
-
-    user = db.scalar(select(User).where(User.id == user_id_int))
-    if user is None or not user.active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    token_ver = payload.get("ver")
-    if token_ver is not None and token_ver != user.token_version:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has been revoked",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return user
