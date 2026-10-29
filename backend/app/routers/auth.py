@@ -1,4 +1,3 @@
-
 import re
 from datetime import UTC, datetime, timedelta
 
@@ -110,9 +109,7 @@ def register(
             "Email domain is not approved for registration.",
         )
 
-    existing = db.scalar(
-        select(User).where(User.email == payload.email)
-    )
+    existing = db.scalar(select(User).where(User.email == payload.email))
 
     if existing:
         return error_response(
@@ -156,9 +153,7 @@ def login(
 ):
     settings = get_settings()
 
-    user = db.scalar(
-        select(User).where(User.email == payload.email)
-    )
+    user = db.scalar(select(User).where(User.email == payload.email))
 
     # Return the same error for an unknown email and wrong password.
     if user is None or not user.active:
@@ -183,9 +178,7 @@ def login(
             "Invalid email or password.",
         )
 
-    expires_at = datetime.now(UTC) + timedelta(
-        minutes=settings.jwt_expire_minutes
-    )
+    expires_at = datetime.now(UTC) + timedelta(minutes=settings.jwt_expire_minutes)
 
     access_token = jwt.encode(
         {
