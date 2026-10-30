@@ -3,20 +3,28 @@ from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
+from app.login_rate_limit import LoginRateLimiter
 from app.models import User
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 security = HTTPBearer(auto_error=False)
+login_rate_limiter = LoginRateLimiter(max_attempts=5, window_seconds=900)
 
 
 class RegisterRequest(BaseModel):
@@ -72,6 +80,32 @@ class UserOut(BaseModel):
     location: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProfileUpdateRequest(BaseModel):
+    """Only profile-editable fields are accepted."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="forbid",
+    )
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    department: str | None = Field(default=None, max_length=100)
+    location: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_update(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one profile field must be provided")
+
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("Name cannot be null")
+
+        if "location" in self.model_fields_set and self.location is None:
+            raise ValueError("Location cannot be null")
+
+        return self
 
 
 class LoginResponse(BaseModel):
@@ -153,14 +187,29 @@ def register(
 @router.post("/login", response_model=LoginResponse)
 def login(
     payload: LoginRequest,
+    request: Request,
     db: Session = Depends(get_db),  # noqa: B008
 ):
     settings = get_settings()
+    email = payload.email.strip().lower()
+    client_ip = request.client.host if request.client else "unknown"
 
-    user = db.scalar(select(User).where(User.email == payload.email))
+    # Block the next attempt once five failures remain in the window.
+    retry_after = login_rate_limiter.retry_after(email, client_ip)
+    if retry_after is not None:
+        response = error_response(
+            429,
+            "LOGIN_RATE_LIMITED",
+            "Too many failed login attempts. Try again later.",
+        )
+        response.headers["Retry-After"] = str(retry_after)
+        return response
 
-    # Return the same error for an unknown email and wrong password.
+    user = db.scalar(select(User).where(User.email == email))
+
+    # Keep unknown emails and incorrect passwords indistinguishable.
     if user is None or not user.active:
+        login_rate_limiter.record_failure(email, client_ip)
         return error_response(
             401,
             "INVALID_CREDENTIALS",
@@ -176,11 +225,15 @@ def login(
         password_matches = False
 
     if not password_matches:
+        login_rate_limiter.record_failure(email, client_ip)
         return error_response(
             401,
             "INVALID_CREDENTIALS",
             "Invalid email or password.",
         )
+
+    # A successful login clears this email/IP pair's previous failures.
+    login_rate_limiter.record_success(email, client_ip)
 
     expires_at = datetime.now(UTC) + timedelta(minutes=settings.jwt_expire_minutes)
 
@@ -271,3 +324,30 @@ def get_current_user(
         )
 
     return user
+
+
+@router.get("/me", response_model=UserOut)
+def get_my_profile(
+    current_user: User = Depends(get_current_user),  # noqa: B008
+):
+    """Return the authenticated student's profile (F-004)."""
+    return current_user
+
+
+@router.patch("/me", response_model=UserOut)
+def update_my_profile(
+    payload: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+):
+    """Partially update permitted profile fields (F-004)."""
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    for field, value in updates.items():
+        setattr(current_user, field, value)
+
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user

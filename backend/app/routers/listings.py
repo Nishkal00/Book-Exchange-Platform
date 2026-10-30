@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -157,6 +157,16 @@ def serialize_listing(listing: Listing) -> ListingOut:
         owner_id=listing.owner_id,
         created_at=listing.created_at,
     )
+
+
+def has_active_exchange(listing_id: int, db: Session | None = None) -> bool:
+    """Check if listing is involved in an active exchange (F-013).
+
+    Sprint 1 stub: The exchanges table arrives in Sprint 2.
+    Defaults to False so idle listings can be soft-deleted.
+    Can be monkeypatched in tests (e.g. TC-LST-07).
+    """
+    return False
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=ListingOut)
@@ -429,3 +439,44 @@ def update_listing(
         .where(Listing.id == listing_id)
     )
     return serialize_listing(updated)
+
+
+@router.delete("/{listing_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_listing(
+    listing_id: int,
+    current_user: User = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> Response:
+    """Soft-delete an owner's listing (F-013, SR-005).
+
+    - Returns 204 No Content upon successful deletion.
+    - Missing or already deleted IDs return 404.
+    - Non-owners receive 403 Forbidden.
+    - Listings involved in an active exchange return 409 Conflict (ACTIVE_EXCHANGE).
+    """
+    listing = db.scalar(select(Listing).where(Listing.id == listing_id))
+
+    if listing is None or listing.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Listing not found",
+        )
+
+    # SR-005: Enforce ownership or explicit admin role server-side
+    if listing.owner_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to modify this listing",
+        )
+
+    # F-013: Active-exchange guard (Sprint 1 test double)
+    if has_active_exchange(listing_id, db):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="ACTIVE_EXCHANGE",
+        )
+
+    listing.deleted_at = datetime.now(UTC)
+    db.commit()
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
