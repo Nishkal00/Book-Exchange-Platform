@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -13,6 +13,7 @@ from app.routers.auth import get_current_user
 router = APIRouter(prefix="/api/v1/listings", tags=["listings"])
 
 ALLOWED_CONDITIONS = {"NEW", "GOOD", "FAIR", "POOR"}
+ALLOWED_UPDATE_STATUSES = {"AVAILABLE", "UNAVAILABLE"}
 
 CONDITION_TO_RANK: dict[str, int] = {
     "POOR": 1,
@@ -57,6 +58,54 @@ class CreateListingRequest(BaseModel):
             raise ValueError(
                 "ISBN must be 10 or 13 digits after hyphen removal in this course baseline"
             )
+        return cleaned
+
+
+class UpdateListingRequest(BaseModel):
+    """Payload schema for partially updating a listing (F-012, SR-005)."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+    )
+
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    author: str | None = Field(default=None, min_length=1, max_length=150)
+    location: str | None = Field(default=None, min_length=1, max_length=100)
+    condition: str | None = None
+    isbn: str | None = None
+    status: str | None = None
+
+    @field_validator("condition")
+    @classmethod
+    def validate_condition(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip().upper()
+        if cleaned not in ALLOWED_CONDITIONS:
+            raise ValueError(f"Condition must be one of: {', '.join(sorted(ALLOWED_CONDITIONS))}")
+        return cleaned
+
+    @field_validator("isbn")
+    @classmethod
+    def validate_isbn(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.replace("-", "").strip()
+        if not (len(cleaned) in (10, 13) and cleaned.isdigit()):
+            raise ValueError(
+                "ISBN must be 10 or 13 digits after hyphen removal in this course baseline"
+            )
+        return cleaned
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip().upper()
+        if cleaned not in ALLOWED_UPDATE_STATUSES:
+            raise ValueError(f"Status must be one of: {', '.join(sorted(ALLOWED_UPDATE_STATUSES))}")
         return cleaned
 
 
@@ -273,3 +322,110 @@ def search_listings(
         size=size,
         total=total,
     )
+
+
+@router.put("/{listing_id}", response_model=ListingOut)
+@router.patch("/{listing_id}", response_model=ListingOut)
+def update_listing(
+    listing_id: int,
+    payload: UpdateListingRequest,
+    current_user: User = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> ListingOut:
+    """Allow the owner or admin to partially update a listing (F-012, SR-005).
+
+    - Non-owners receive 403.
+    - Missing or soft-deleted IDs receive 404.
+    - Reserved or on-loan listings cannot be changed to available or have their book changed (409).
+    - Shared book updates reuse or create catalog entries by ISBN rather than modifying other
+      listings.
+    """
+    listing = db.scalar(
+        select(Listing)
+        .join(Listing.book)
+        .options(contains_eager(Listing.book))
+        .where(Listing.id == listing_id)
+    )
+
+    if listing is None or listing.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Listing not found",
+        )
+
+    # SR-005: Enforce ownership or explicit admin role server-side
+    if listing.owner_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to modify this listing",
+        )
+
+    # F-012: Reserved or on-loan listings lifecycle guards
+    if listing.status in ("RESERVED", "ON_LOAN"):
+        if payload.status == "AVAILABLE":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Reserved or on-loan listings cannot be changed to available",
+            )
+        # Check if book fields are being changed
+        target_isbn = payload.isbn if payload.isbn is not None else listing.book.isbn
+        target_title = payload.title if payload.title is not None else listing.book.title
+        target_author = payload.author if payload.author is not None else listing.book.author
+        if (
+            target_isbn != listing.book.isbn
+            or target_title != listing.book.title
+            or target_author != listing.book.author
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Reserved or on-loan listings cannot have their book changed",
+            )
+
+    # F-012 / SAD 4.3: Changing shared book data uses get-or-create ISBN instead of modifying
+    # another owner's catalog entry.
+    if payload.isbn is not None or payload.title is not None or payload.author is not None:
+        target_isbn = payload.isbn if payload.isbn is not None else listing.book.isbn
+        target_title = payload.title if payload.title is not None else listing.book.title
+        target_author = payload.author if payload.author is not None else listing.book.author
+
+        if (
+            target_isbn != listing.book.isbn
+            or target_title != listing.book.title
+            or target_author != listing.book.author
+        ):
+            book = db.scalar(select(Book).where(Book.isbn == target_isbn))
+            if book is None:
+                book = Book(
+                    isbn=target_isbn,
+                    title=target_title,
+                    author=target_author,
+                )
+                db.add(book)
+                try:
+                    db.flush()
+                except IntegrityError:
+                    db.rollback()
+                    book = db.scalar(select(Book).where(Book.isbn == target_isbn))
+                    if book is None:
+                        raise
+            listing.book_id = book.id
+
+    if payload.condition is not None:
+        listing.condition_rank = CONDITION_TO_RANK[payload.condition]
+
+    if payload.location is not None:
+        listing.location = payload.location
+
+    if payload.status is not None:
+        listing.status = payload.status
+
+    db.commit()
+    db.expire_all()
+
+    updated = db.scalar(
+        select(Listing)
+        .join(Listing.book)
+        .options(contains_eager(Listing.book))
+        .where(Listing.id == listing_id)
+    )
+    return serialize_listing(updated)
