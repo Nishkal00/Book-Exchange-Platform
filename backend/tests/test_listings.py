@@ -1292,27 +1292,46 @@ def test_tc_sec_05_update_listing_ownership_enforcement(client, db):
     )
     assert res_hack.status_code == 403
 
+    # Student B attempts to delete Student A's listing directly via API -> 403 (TC-SEC-05)
+    res_hack_del = client.delete(
+        f"/api/v1/listings/{listing_a.id}",
+        headers=headers_b,
+    )
+    assert res_hack_del.status_code == 403
+
     # Verify Student A's listing data remains completely unchanged
     persisted = db.query(Listing).filter_by(id=listing_a.id).one()
     assert persisted.condition_rank == 3
     assert persisted.location == "Lab 102"
     assert persisted.status == "AVAILABLE"
     assert persisted.owner_id == student_a.id
+    assert persisted.deleted_at is None
 
-    # 2. Unauthenticated caller attempts update -> 401
+    # 2. Unauthenticated caller attempts update or delete -> 401
     res_no_auth = client.put(
         f"/api/v1/listings/{listing_a.id}",
         json={"location": "No Auth Room"},
     )
     assert res_no_auth.status_code == 401
 
-    # 3. Invalid token attempts update -> 401
+    res_no_auth_del = client.delete(
+        f"/api/v1/listings/{listing_a.id}",
+    )
+    assert res_no_auth_del.status_code == 401
+
+    # 3. Invalid token attempts update or delete -> 401
     res_bad_token = client.put(
         f"/api/v1/listings/{listing_a.id}",
         headers={"Authorization": "Bearer totally_bogus_token"},
         json={"location": "Bad Token Room"},
     )
     assert res_bad_token.status_code == 401
+
+    res_bad_token_del = client.delete(
+        f"/api/v1/listings/{listing_a.id}",
+        headers={"Authorization": "Bearer totally_bogus_token"},
+    )
+    assert res_bad_token_del.status_code == 401
 
     # 4. Admin user performs mutation on Student A's listing -> 200 (SR-005 server-side admin role)
     res_admin = client.put(
@@ -1441,3 +1460,146 @@ def test_tc_prf_02_listing_privilege_escalation_rejected(client, db):
     assert listing_check.location == "Room 303"
     assert listing_check.status == "AVAILABLE"
     assert listing_check.owner_id == owner.id
+
+
+# ==============================================================================
+# TC-LST-06: Owner deletes idle listing, deleted_at set, query exclusion (F-013)
+# ==============================================================================
+
+
+def test_tc_lst_06_delete_idle_listing_and_exclusion(client, db):
+    """TC-LST-06: Owner deletes idle listing -> 204, deleted_at set.
+    Verify absent in public and mine lists; repeated delete -> 404.
+    """
+    owner = create_test_user(db, email="delete_owner@example.edu")
+    token = create_auth_token(owner)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Create idle listing
+    listing = create_test_listing(
+        db,
+        owner=owner,
+        title="Modern Operating Systems",
+        author="Tanenbaum",
+        isbn="9780133591620",
+        condition_rank=3,
+        location="Hostel 2",
+        status="AVAILABLE",
+    )
+
+    # Verify listing is present in public search and /listings/mine before deletion
+    res_pub_before = client.get(f"/api/v1/listings?isbn={listing.book.isbn}")
+    assert res_pub_before.status_code == 200
+    assert any(it["id"] == listing.id for it in res_pub_before.json()["items"])
+
+    res_mine_before = client.get("/api/v1/listings/mine", headers=headers)
+    assert res_mine_before.status_code == 200
+    assert any(it["id"] == listing.id for it in res_mine_before.json()["items"])
+
+    # 2. Owner deletes idle listing -> 204 No Content
+    res_del = client.delete(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+    )
+    assert res_del.status_code == 204
+    assert res_del.content == b""
+
+    # Verify in DB: deleted_at timestamp is now set
+    refreshed = db.query(Listing).filter_by(id=listing.id).one()
+    assert refreshed.deleted_at is not None
+
+    # 3. Verify absent in public search
+    res_pub_after = client.get(f"/api/v1/listings?isbn={listing.book.isbn}")
+    assert res_pub_after.status_code == 200
+    assert not any(it["id"] == listing.id for it in res_pub_after.json()["items"])
+
+    # 4. Verify absent in owner's /listings/mine
+    res_mine_after = client.get("/api/v1/listings/mine", headers=headers)
+    assert res_mine_after.status_code == 200
+    assert not any(it["id"] == listing.id for it in res_mine_after.json()["items"])
+
+    # 5. Repeated delete on already soft-deleted listing -> 404
+    res_repeated_del = client.delete(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+    )
+    assert res_repeated_del.status_code == 404
+
+    # 6. Delete on non-existent listing ID -> 404
+    res_missing_del = client.delete(
+        "/api/v1/listings/999999",
+        headers=headers,
+    )
+    assert res_missing_del.status_code == 404
+
+    # 7. Updating already deleted listing -> 404
+    res_update_deleted = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+        json={"location": "Attempt Update Room"},
+    )
+    assert res_update_deleted.status_code == 404
+
+
+# ==============================================================================
+# TC-LST-07: Active exchange guard on deletion (F-013 Sprint 1 test double)
+# ==============================================================================
+
+
+def test_tc_lst_07_active_exchange_delete_guard(client, db, monkeypatch):
+    """TC-LST-07: Sprint 1: patch has_active_exchange true; deletion -> 409
+    and no timestamp change. Sprint 2: create real active exchange and repeat
+    without a mock.
+    """
+    owner = create_test_user(db, email="active_exchange_owner@example.edu")
+    token = create_auth_token(owner)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    listing = create_test_listing(
+        db,
+        owner=owner,
+        title="Distributed Systems Concepts",
+        author="Coulouris",
+        isbn="9780132143011",
+        condition_rank=4,
+        location="Lab 3",
+        status="AVAILABLE",
+    )
+
+    # 1. Patch has_active_exchange to return True (Sprint 1 test double)
+    monkeypatch.setattr(
+        "app.routers.listings.has_active_exchange",
+        lambda listing_id, db=None: True,
+    )
+
+    # 2. Attempt deletion -> 409 Conflict with ACTIVE_EXCHANGE error
+    res_del_active = client.delete(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+    )
+    assert res_del_active.status_code == 409
+    assert "ACTIVE_EXCHANGE" in str(res_del_active.json())
+
+    # 3. Verify in database: deleted_at has NO timestamp change (remains None)
+    listing_refreshed = db.query(Listing).filter_by(id=listing.id).one()
+    assert listing_refreshed.deleted_at is None
+
+    # Verify listing is still visible in public search and /listings/mine
+    res_pub = client.get(f"/api/v1/listings?isbn={listing.book.isbn}")
+    assert any(it["id"] == listing.id for it in res_pub.json()["items"])
+
+    res_mine = client.get("/api/v1/listings/mine", headers=headers)
+    assert any(it["id"] == listing.id for it in res_mine.json()["items"])
+
+    # 4. Remove patch (has_active_exchange returns False) -> deletion succeeds with 204
+    monkeypatch.setattr(
+        "app.routers.listings.has_active_exchange",
+        lambda listing_id, db=None: False,
+    )
+    res_del_ok = client.delete(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+    )
+    assert res_del_ok.status_code == 204
+    listing_deleted = db.query(Listing).filter_by(id=listing.id).one()
+    assert listing_deleted.deleted_at is not None
