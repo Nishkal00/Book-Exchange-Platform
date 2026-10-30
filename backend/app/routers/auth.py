@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -13,10 +13,12 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
+from app.login_rate_limit import LoginRateLimiter
 from app.models import User
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 security = HTTPBearer(auto_error=False)
+login_rate_limiter = LoginRateLimiter(max_attempts=5, window_seconds=900)
 
 
 class RegisterRequest(BaseModel):
@@ -153,14 +155,29 @@ def register(
 @router.post("/login", response_model=LoginResponse)
 def login(
     payload: LoginRequest,
+    request: Request,
     db: Session = Depends(get_db),  # noqa: B008
 ):
     settings = get_settings()
+    email = payload.email.strip().lower()
+    client_ip = request.client.host if request.client else "unknown"
 
-    user = db.scalar(select(User).where(User.email == payload.email))
+    # Block the next attempt once five failures remain in the window.
+    retry_after = login_rate_limiter.retry_after(email, client_ip)
+    if retry_after is not None:
+        response = error_response(
+            429,
+            "LOGIN_RATE_LIMITED",
+            "Too many failed login attempts. Try again later.",
+        )
+        response.headers["Retry-After"] = str(retry_after)
+        return response
 
-    # Return the same error for an unknown email and wrong password.
+    user = db.scalar(select(User).where(User.email == email))
+
+    # Keep unknown emails and incorrect passwords indistinguishable.
     if user is None or not user.active:
+        login_rate_limiter.record_failure(email, client_ip)
         return error_response(
             401,
             "INVALID_CREDENTIALS",
@@ -176,11 +193,15 @@ def login(
         password_matches = False
 
     if not password_matches:
+        login_rate_limiter.record_failure(email, client_ip)
         return error_response(
             401,
             "INVALID_CREDENTIALS",
             "Invalid email or password.",
         )
+
+    # A successful login clears this email/IP pair's previous failures.
+    login_rate_limiter.record_success(email, client_ip)
 
     expires_at = datetime.now(UTC) + timedelta(minutes=settings.jwt_expire_minutes)
 
