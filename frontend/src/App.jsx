@@ -56,6 +56,27 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const [total, setTotal] = useState(0);
 
+  // My Listings and Profile
+  const EMPTY_LISTING_FORM = {
+    title: "",
+    author: "",
+    isbn: "",
+    condition: "GOOD",
+    location: "",
+  };
+  const [showListingForm, setShowListingForm] = useState(false);
+  const [editingListing, setEditingListing] = useState(null);
+  const [listingForm, setListingForm] = useState(EMPTY_LISTING_FORM);
+  const [listingSaving, setListingSaving] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [profileForm, setProfileForm] = useState({
+    name: "",
+    department: "",
+    location: "",
+  });
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // --------------------------------------------------
@@ -215,6 +236,9 @@ function App() {
         currentPage
       );
     }
+    else if (page === "profile" && user) {
+      fetchProfile();
+    }
 
     // Filters are applied only when the search form is submitted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -225,7 +249,7 @@ function App() {
   // --------------------------------------------------
 
   function navigate(nextPage) {
-    if (nextPage === "mine" && !user) {
+    if ((nextPage === "mine" || nextPage === "profile") && !user) {
       setPage("login");
       setMessage("Please sign in to view your listings.");
       setMessageType("error");
@@ -372,6 +396,182 @@ function App() {
     setListingError("");
 
     setPage("home");
+  }
+
+  // --------------------------------------------------
+  // My Listings actions
+  // --------------------------------------------------
+
+  function authConfig() {
+    return {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("bep_token")}`,
+      },
+    };
+  }
+
+  function openCreateListing() {
+    setEditingListing(null);
+    setListingForm(EMPTY_LISTING_FORM);
+    setShowListingForm(true);
+    setMessage("");
+    setMessageType("");
+  }
+
+  function openEditListing(book) {
+    setEditingListing(book);
+    setListingForm({
+      title: book.title || "",
+      author: book.author || "",
+      isbn: book.isbn || "",
+      condition: book.condition || "GOOD",
+      location: book.location || "",
+    });
+    setShowListingForm(true);
+    setMessage("");
+    setMessageType("");
+  }
+
+  function closeListingForm() {
+    setShowListingForm(false);
+    setEditingListing(null);
+    setListingForm(EMPTY_LISTING_FORM);
+  }
+
+  async function handleListingSubmit(event) {
+    event.preventDefault();
+    setListingSaving(true);
+    setMessage("");
+    setMessageType("");
+
+    const payload = {
+      title: listingForm.title.trim(),
+      author: listingForm.author.trim(),
+      isbn: listingForm.isbn.replace(/-/g, "").trim(),
+      condition: listingForm.condition,
+      location: listingForm.location.trim(),
+    };
+
+    try {
+      if (editingListing) {
+        await api.patch(
+          `/api/v1/listings/${editingListing.id}`,
+          payload,
+          authConfig()
+        );
+        setMessage("Listing updated successfully.");
+      } else {
+        await api.post("/api/v1/listings", payload, authConfig());
+        setMessage("Book listed successfully.");
+      }
+
+      setMessageType("success");
+      closeListingForm();
+      setCurrentPage(1);
+      await fetchListings("/api/v1/listings/mine", true, 1);
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Could not save the listing."));
+      setMessageType("error");
+    } finally {
+      setListingSaving(false);
+    }
+  }
+
+  async function handleListingStatusChange(book) {
+    const nextStatus =
+      book.status === "AVAILABLE" ? "UNAVAILABLE" : "AVAILABLE";
+
+    try {
+      await api.patch(
+        `/api/v1/listings/${book.id}`,
+        { status: nextStatus },
+        authConfig()
+      );
+      setMessage(`Listing marked ${nextStatus.toLowerCase()}.`);
+      setMessageType("success");
+      await fetchListings("/api/v1/listings/mine", true, currentPage);
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Could not update listing status."));
+      setMessageType("error");
+    }
+  }
+
+  async function handleDeleteListing(book) {
+    if (!window.confirm(`Delete "${book.title}"?`)) return;
+
+    try {
+      await api.delete(`/api/v1/listings/${book.id}`, authConfig());
+      setMessage("Listing deleted successfully.");
+      setMessageType("success");
+      await fetchListings("/api/v1/listings/mine", true, currentPage);
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Could not delete this listing."));
+      setMessageType("error");
+    }
+  }
+
+  // --------------------------------------------------
+  // Profile
+  // --------------------------------------------------
+
+  async function fetchProfile() {
+    setProfileLoading(true);
+    setMessage("");
+    setMessageType("");
+
+    try {
+      const response = await api.get("/api/v1/auth/me", authConfig());
+      setProfile(response.data);
+      setProfileForm({
+        name: response.data.name || "",
+        department: response.data.department || "",
+        location: response.data.location || "",
+      });
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Could not load your profile."));
+      setMessageType("error");
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
+  async function handleProfileSubmit(event) {
+    event.preventDefault();
+    setProfileSaving(true);
+    setMessage("");
+    setMessageType("");
+
+    try {
+      const payload = {
+        name: profileForm.name.trim(),
+        department: profileForm.department.trim() || null,
+        location: profileForm.location.trim(),
+      };
+      const response = await api.patch(
+        "/api/v1/auth/me",
+        payload,
+        authConfig()
+      );
+
+      setProfile(response.data);
+      setProfileForm({
+        name: response.data.name || "",
+        department: response.data.department || "",
+        location: response.data.location || "",
+      });
+
+      const updatedUser = { ...user, ...response.data };
+      setUser(updatedUser);
+      localStorage.setItem("bep_user", JSON.stringify(updatedUser));
+
+      setMessage("Profile updated successfully.");
+      setMessageType("success");
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Could not update your profile."));
+      setMessageType("error");
+    } finally {
+      setProfileSaving(false);
+    }
   }
 
   // --------------------------------------------------
@@ -535,17 +735,81 @@ function App() {
 
         <div className="results-heading">
           <div>
-            <span className="eyebrow">
-              BOOK EXCHANGE COLLECTION
-            </span>
-
+            <span className="eyebrow">BOOK EXCHANGE COLLECTION</span>
             <h2>{isMine ? "Your Books" : "Available Books"}</h2>
           </div>
-
-          <span>
-            {total} {total === 1 ? "book" : "books"} found
-          </span>
+          <div className="results-actions">
+            <span>{total} {total === 1 ? "book" : "books"} found</span>
+            {isMine && (
+              <button className="primary-btn" type="button" onClick={openCreateListing}>
+                + Add a Book
+              </button>
+            )}
+          </div>
         </div>
+
+        {isMine && message && (
+          <div className="message" role="status" data-type={messageType}>
+            {message}
+          </div>
+        )}
+
+        {isMine && showListingForm && (
+          <form className="listing-form-panel" onSubmit={handleListingSubmit}>
+            <div className="form-panel-heading">
+              <div>
+                <span className="eyebrow">{editingListing ? "UPDATE YOUR BOOK" : "SHARE A BOOK"}</span>
+                <h2>{editingListing ? "Edit Listing" : "Create Listing"}</h2>
+              </div>
+              <button type="button" className="form-close-btn" onClick={closeListingForm} aria-label="Close form">×</button>
+            </div>
+
+            <div className="listing-form-grid">
+              <label className="field">
+                <span>Book Title *</span>
+                <input required maxLength={200} value={listingForm.title}
+                  onChange={(e) => setListingForm({ ...listingForm, title: e.target.value })}
+                  placeholder="Enter book title" />
+              </label>
+              <label className="field">
+                <span>Author *</span>
+                <input required maxLength={150} value={listingForm.author}
+                  onChange={(e) => setListingForm({ ...listingForm, author: e.target.value })}
+                  placeholder="Enter author name" />
+              </label>
+              <label className="field">
+                <span>ISBN *</span>
+                <input required value={listingForm.isbn}
+                  onChange={(e) => setListingForm({ ...listingForm, isbn: e.target.value })}
+                  placeholder="10 or 13 digit ISBN" />
+              </label>
+              <label className="field">
+                <span>Condition *</span>
+                <select required value={listingForm.condition}
+                  onChange={(e) => setListingForm({ ...listingForm, condition: e.target.value })}>
+                  <option value="NEW">New</option>
+                  <option value="GOOD">Good</option>
+                  <option value="FAIR">Fair</option>
+                  <option value="POOR">Poor</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Location *</span>
+                <input required maxLength={100} value={listingForm.location}
+                  onChange={(e) => setListingForm({ ...listingForm, location: e.target.value })}
+                  placeholder="Enter pickup location" />
+              </label>
+            </div>
+            <div className="listing-form-actions">
+              <button className="primary-btn" type="submit" disabled={listingSaving}>
+                {listingSaving ? "Saving..." : editingListing ? "Save Changes" : "Create Listing"}
+              </button>
+              <button className="secondary-btn" type="button" onClick={closeListingForm} disabled={listingSaving}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
 
         {listingLoading ? (
           <div className="listing-state">
@@ -641,6 +905,25 @@ function App() {
                       <strong>Location:</strong> {book.location}
                     </p>
                   </div>
+
+                  {isMine && (
+                    <div className="listing-card-actions">
+                      <button className="secondary-btn" type="button" onClick={() => openEditListing(book)}>
+                        Edit
+                      </button>
+                      <button
+                        className="secondary-btn"
+                        type="button"
+                        onClick={() => handleListingStatusChange(book)}
+                        disabled={book.status === "RESERVED" || book.status === "ON_LOAN"}
+                      >
+                        {book.status === "AVAILABLE" ? "Mark Unavailable" : "Mark Available"}
+                      </button>
+                      <button className="danger-btn" type="button" onClick={() => handleDeleteListing(book)}>
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               </article>
             ))}
@@ -717,6 +1000,14 @@ function App() {
               onClick={() => navigate("mine")}
             >
               My Listings
+            </button>
+          )}
+          {user && (
+            <button
+              className={page === "profile" ? "active" : ""}
+              onClick={() => navigate("profile")}
+            >
+              Profile
             </button>
           )}
 
@@ -838,6 +1129,67 @@ function App() {
 
         {(page === "browse" || page === "mine") &&
           renderListings()}
+
+        {/* PROFILE */}
+
+        {page === "profile" && user && (
+          <section className="browse-page profile-page">
+            <div className="browse-heading">
+              <span className="eyebrow">YOUR ACCOUNT</span>
+              <h1>Profile</h1>
+              <p>Manage your personal information and campus details.</p>
+            </div>
+
+            {profileLoading ? (
+              <div className="listing-state"><div className="loader" /><p>Loading profile...</p></div>
+            ) : profile ? (
+              <form className="profile-form-panel" onSubmit={handleProfileSubmit}>
+                <div className="profile-readonly-grid">
+                  <div className="profile-readonly">
+                    <span>Email address</span>
+                    <strong>{profile.email}</strong>
+                  </div>
+                  <div className="profile-readonly">
+                    <span>Account role</span>
+                    <strong>{profile.role}</strong>
+                  </div>
+                </div>
+
+                <div className="listing-form-grid">
+                  <label className="field">
+                    <span>Full name *</span>
+                    <input required maxLength={100} value={profileForm.name}
+                      onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} />
+                  </label>
+                  <label className="field">
+                    <span>Department</span>
+                    <input maxLength={100} value={profileForm.department}
+                      onChange={(e) => setProfileForm({ ...profileForm, department: e.target.value })} />
+                  </label>
+                  <label className="field">
+                    <span>Location *</span>
+                    <input required maxLength={100} value={profileForm.location}
+                      onChange={(e) => setProfileForm({ ...profileForm, location: e.target.value })} />
+                  </label>
+                </div>
+
+                <button className="primary-btn" type="submit" disabled={profileSaving}>
+                  {profileSaving ? "Saving..." : "Save Profile"}
+                </button>
+              </form>
+            ) : (
+              <div className="listing-state error-state">
+                <h3>Profile unavailable</h3>
+                <p>{message || "Could not load your profile."}</p>
+                <button className="primary-btn" type="button" onClick={fetchProfile}>Try Again</button>
+              </div>
+            )}
+
+            {message && (
+              <div className="message" role="status" data-type={messageType}>{message}</div>
+            )}
+          </section>
+        )}
 
         {/* REGISTER */}
 
