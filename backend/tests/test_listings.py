@@ -1026,3 +1026,418 @@ def test_tc_perf_01_search_performance_smoke(client, db):
     # All search queries should complete well within the <= 2.0s NF-001 threshold
     for latency in latencies:
         assert latency < 2.0, f"Query latency {latency:.3f}s exceeded 2.0s limit"
+
+
+# ==============================================================================
+# TC-LST-05: Owner changes condition/status, lifecycle guards, missing IDs (F-012)
+# ==============================================================================
+
+
+def test_tc_lst_05_update_listing_owner_status_and_lifecycle(client, db):
+    """TC-LST-05: Owner changes condition/status -> 200 and persists.
+    Other student -> 403. Missing/deleted ID -> 404. Reserved listing cannot be made available.
+    """
+    owner = create_test_user(db, email="update_owner@example.edu")
+    other_student = create_test_user(db, email="update_other@example.edu")
+    token_owner = create_auth_token(owner)
+    token_other = create_auth_token(other_student)
+    headers_owner = {"Authorization": f"Bearer {token_owner}"}
+    headers_other = {"Authorization": f"Bearer {token_other}"}
+
+    # 1. Seed initial listing: AVAILABLE, GOOD (rank 3)
+    listing = create_test_listing(
+        db,
+        owner=owner,
+        title="Operating Systems Principles",
+        author="Silberschatz",
+        isbn="9781118063330",
+        condition_rank=3,
+        location="Hostel 4",
+        status="AVAILABLE",
+    )
+
+    # 2. Owner changes condition to POOR -> 200 and persists
+    res_cond = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers_owner,
+        json={"condition": "POOR"},
+    )
+    assert res_cond.status_code == 200
+    data_cond = res_cond.json()
+    assert data_cond["condition"] == "POOR"
+    assert data_cond["status"] == "AVAILABLE"
+    # Verify in DB
+    refreshed_1 = db.query(Listing).filter_by(id=listing.id).one()
+    assert refreshed_1.condition_rank == 1
+
+    # 3. Owner changes status to UNAVAILABLE -> 200 and persists
+    res_unavail = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers_owner,
+        json={"status": "UNAVAILABLE"},
+    )
+    assert res_unavail.status_code == 200
+    data_unavail = res_unavail.json()
+    assert data_unavail["status"] == "UNAVAILABLE"
+    refreshed_2 = db.query(Listing).filter_by(id=listing.id).one()
+    assert refreshed_2.status == "UNAVAILABLE"
+
+    # Owner toggles status back to AVAILABLE -> 200 and persists
+    res_avail = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers_owner,
+        json={"status": "AVAILABLE"},
+    )
+    assert res_avail.status_code == 200
+    assert res_avail.json()["status"] == "AVAILABLE"
+    refreshed_3 = db.query(Listing).filter_by(id=listing.id).one()
+    assert refreshed_3.status == "AVAILABLE"
+
+    # 4. Owner updates location and condition together
+    res_multi = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers_owner,
+        json={"condition": "NEW", "location": "Campus Center Room 101"},
+    )
+    assert res_multi.status_code == 200
+    data_multi = res_multi.json()
+    assert data_multi["condition"] == "NEW"
+    assert data_multi["location"] == "Campus Center Room 101"
+
+    # 5. Non-owner (other student) attempts to update -> 403
+    res_other = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers_other,
+        json={"condition": "FAIR", "status": "UNAVAILABLE"},
+    )
+    assert res_other.status_code == 403
+    # Listing in DB remains completely unchanged
+    refreshed_4 = db.query(Listing).filter_by(id=listing.id).one()
+    assert refreshed_4.condition_rank == 4
+    assert refreshed_4.status == "AVAILABLE"
+    assert refreshed_4.location == "Campus Center Room 101"
+
+    # 6. Missing listing ID -> 404
+    res_missing = client.put(
+        "/api/v1/listings/999999",
+        headers=headers_owner,
+        json={"status": "UNAVAILABLE"},
+    )
+    assert res_missing.status_code == 404
+
+    # 7. Soft-deleted listing ID -> 404
+    deleted_listing = create_test_listing(
+        db,
+        owner=owner,
+        title="Deleted Book",
+        author="Deleted Author",
+        isbn="9780000000999",
+        status="AVAILABLE",
+        deleted_at=datetime.now(UTC),
+    )
+    res_deleted = client.put(
+        f"/api/v1/listings/{deleted_listing.id}",
+        headers=headers_owner,
+        json={"status": "UNAVAILABLE"},
+    )
+    assert res_deleted.status_code == 404
+
+    # 8. Reserved listing cannot be made available -> 409
+    reserved_listing = create_test_listing(
+        db,
+        owner=owner,
+        title="Reserved Book",
+        author="Reserved Author",
+        isbn="9780000000888",
+        status="RESERVED",
+    )
+    res_res_avail = client.put(
+        f"/api/v1/listings/{reserved_listing.id}",
+        headers=headers_owner,
+        json={"status": "AVAILABLE"},
+    )
+    assert res_res_avail.status_code == 409
+    # Verify status in DB remains RESERVED
+    res_check = db.query(Listing).filter_by(id=reserved_listing.id).one()
+    assert res_check.status == "RESERVED"
+
+    # Reserved listing cannot have book changed -> 409
+    res_res_book = client.put(
+        f"/api/v1/listings/{reserved_listing.id}",
+        headers=headers_owner,
+        json={"title": "New Title Attempt"},
+    )
+    assert res_res_book.status_code == 409
+    res_check_b = db.query(Listing).filter_by(id=reserved_listing.id).one()
+    assert res_check_b.book.title == "Reserved Book"
+
+    # Reserved listing CAN update condition and location without altering status or book
+    res_res_ok = client.put(
+        f"/api/v1/listings/{reserved_listing.id}",
+        headers=headers_owner,
+        json={"condition": "FAIR", "location": "Study Hall 3"},
+    )
+    assert res_res_ok.status_code == 200
+    res_check_c = db.query(Listing).filter_by(id=reserved_listing.id).one()
+    assert res_check_c.condition_rank == 2
+    assert res_check_c.location == "Study Hall 3"
+    assert res_check_c.status == "RESERVED"
+
+    # 9. On-loan listing cannot be made available -> 409
+    on_loan_listing = create_test_listing(
+        db,
+        owner=owner,
+        title="On Loan Book",
+        author="Loan Author",
+        isbn="9780000000777",
+        status="ON_LOAN",
+    )
+    res_loan_avail = client.put(
+        f"/api/v1/listings/{on_loan_listing.id}",
+        headers=headers_owner,
+        json={"status": "AVAILABLE"},
+    )
+    assert res_loan_avail.status_code == 409
+
+    # On-loan listing cannot have book changed -> 409
+    res_loan_book = client.put(
+        f"/api/v1/listings/{on_loan_listing.id}",
+        headers=headers_owner,
+        json={"isbn": "9781111111111"},
+    )
+    assert res_loan_book.status_code == 409
+
+    # 10. Updating shared book data uses get-or-create ISBN instead of modifying shared catalog
+    # Create another listing sharing the same book
+    listing_shared_1 = create_test_listing(
+        db,
+        owner=owner,
+        title="Shared Catalog Title",
+        author="Shared Catalog Author",
+        isbn="9780321125217",
+        status="AVAILABLE",
+    )
+    listing_shared_2 = create_test_listing(
+        db,
+        owner=other_student,
+        title="Shared Catalog Title",
+        author="Shared Catalog Author",
+        isbn="9780321125217",
+        status="AVAILABLE",
+    )
+    original_book_id = listing_shared_1.book_id
+    assert listing_shared_2.book_id == original_book_id
+
+    # Owner updates listing_shared_1 to point to a new ISBN
+    res_new_book = client.put(
+        f"/api/v1/listings/{listing_shared_1.id}",
+        headers=headers_owner,
+        json={
+            "isbn": "9780134494166",
+            "title": "Clean Architecture",
+            "author": "Robert C. Martin",
+        },
+    )
+    assert res_new_book.status_code == 200
+    data_nb = res_new_book.json()
+    assert data_nb["isbn"] == "9780134494166"
+    assert data_nb["title"] == "Clean Architecture"
+
+    # Verify listing_shared_2's book is untouched and preserved
+    shared_2_refreshed = db.query(Listing).filter_by(id=listing_shared_2.id).one()
+    assert shared_2_refreshed.book_id == original_book_id
+    assert shared_2_refreshed.book.isbn == "9780321125217"
+    assert shared_2_refreshed.book.title == "Shared Catalog Title"
+
+
+# ==============================================================================
+# TC-SEC-05: Server-side ownership and explicit admin role enforcement (SR-005)
+# ==============================================================================
+
+
+def test_tc_sec_05_update_listing_ownership_enforcement(client, db):
+    """TC-SEC-05 (SR-005): Student B attempts update/delete of A listing -> 403
+    and unchanged data. Test authenticated role/ownership enforcement directly at API.
+    Admin user is allowed server-side.
+    """
+    student_a = create_test_user(db, email="student_sec_a@example.edu")
+    student_b = create_test_user(db, email="student_sec_b@example.edu")
+    admin_user = create_test_user(db, email="admin_sec@example.edu")
+    admin_user.role = "admin"
+    db.commit()
+
+    token_b = create_auth_token(student_b)
+    token_admin = create_auth_token(admin_user)
+
+    headers_b = {"Authorization": f"Bearer {token_b}"}
+    headers_admin = {"Authorization": f"Bearer {token_admin}"}
+
+    # Student A creates listing
+    listing_a = create_test_listing(
+        db,
+        owner=student_a,
+        title="Computer Architecture",
+        author="Hennessy and Patterson",
+        isbn="9780128119051",
+        condition_rank=3,
+        location="Lab 102",
+        status="AVAILABLE",
+    )
+
+    # 1. Student B attempts to update Student A's listing directly via API -> 403
+    res_hack = client.put(
+        f"/api/v1/listings/{listing_a.id}",
+        headers=headers_b,
+        json={"condition": "POOR", "location": "Hacked Location", "status": "UNAVAILABLE"},
+    )
+    assert res_hack.status_code == 403
+
+    # Verify Student A's listing data remains completely unchanged
+    persisted = db.query(Listing).filter_by(id=listing_a.id).one()
+    assert persisted.condition_rank == 3
+    assert persisted.location == "Lab 102"
+    assert persisted.status == "AVAILABLE"
+    assert persisted.owner_id == student_a.id
+
+    # 2. Unauthenticated caller attempts update -> 401
+    res_no_auth = client.put(
+        f"/api/v1/listings/{listing_a.id}",
+        json={"location": "No Auth Room"},
+    )
+    assert res_no_auth.status_code == 401
+
+    # 3. Invalid token attempts update -> 401
+    res_bad_token = client.put(
+        f"/api/v1/listings/{listing_a.id}",
+        headers={"Authorization": "Bearer totally_bogus_token"},
+        json={"location": "Bad Token Room"},
+    )
+    assert res_bad_token.status_code == 401
+
+    # 4. Admin user performs mutation on Student A's listing -> 200 (SR-005 server-side admin role)
+    res_admin = client.put(
+        f"/api/v1/listings/{listing_a.id}",
+        headers=headers_admin,
+        json={"location": "Admin Review Desk", "condition": "NEW"},
+    )
+    assert res_admin.status_code == 200
+    data_admin = res_admin.json()
+    assert data_admin["location"] == "Admin Review Desk"
+    assert data_admin["condition"] == "NEW"
+
+    # Persisted in database
+    persisted_after_admin = db.query(Listing).filter_by(id=listing_a.id).one()
+    assert persisted_after_admin.location == "Admin Review Desk"
+    assert persisted_after_admin.condition_rank == 4
+
+
+# ==============================================================================
+# TC-PRF-02: Privilege escalation rejection and field validation on mutations (SR-005)
+# ==============================================================================
+
+
+def test_tc_prf_02_listing_privilege_escalation_rejected(client, db):
+    """TC-PRF-02 (SR-005): PUT role=admin, email, active or password_hash.
+    Expect 422 and unchanged protected fields. Field validation limits enforced.
+    """
+    owner = create_test_user(db, email="priv_escalation@example.edu")
+    token = create_auth_token(owner)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    listing = create_test_listing(
+        db,
+        owner=owner,
+        title="Database Systems",
+        author="Navathe",
+        isbn="9780136086208",
+        condition_rank=3,
+        location="Room 303",
+        status="AVAILABLE",
+    )
+
+    # 1. Attempt to pass role=admin -> 422
+    res_role = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+        json={"role": "admin"},
+    )
+    assert res_role.status_code == 422
+    refreshed_user = db.query(User).filter_by(id=owner.id).one()
+    assert refreshed_user.role == "student"
+
+    # 2. Attempt to pass email -> 422
+    res_email = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+        json={"email": "attacker@example.edu"},
+    )
+    assert res_email.status_code == 422
+    refreshed_user = db.query(User).filter_by(id=owner.id).one()
+    assert refreshed_user.email == "priv_escalation@example.edu"
+
+    # 3. Attempt to pass active=False -> 422
+    res_active = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+        json={"active": False},
+    )
+    assert res_active.status_code == 422
+    refreshed_user = db.query(User).filter_by(id=owner.id).one()
+    assert refreshed_user.active is True
+
+    # 4. Attempt to pass password_hash -> 422
+    res_hash = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+        json={"password_hash": "malicious_hash_override"},
+    )
+    assert res_hash.status_code == 422
+    refreshed_user = db.query(User).filter_by(id=owner.id).one()
+    assert refreshed_user.password_hash == "hashed_pw_test"
+
+    # 5. Attempt to pass owner_id / ownerId -> 422
+    res_owner = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+        json={"owner_id": 999},
+    )
+    assert res_owner.status_code == 422
+
+    # 6. Field validation: empty string title -> 422
+    res_empty_title = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+        json={"title": "   "},
+    )
+    assert res_empty_title.status_code == 422
+
+    # 7. Field validation: invalid condition -> 422
+    res_bad_cond = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+        json={"condition": "SUPERB"},
+    )
+    assert res_bad_cond.status_code == 422
+
+    # 8. Field validation: invalid status (e.g. attempting to jump straight to ON_LOAN) -> 422
+    res_bad_status = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+        json={"status": "ON_LOAN"},
+    )
+    assert res_bad_status.status_code == 422
+
+    # 9. Field validation: invalid ISBN length -> 422
+    res_bad_isbn = client.put(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers,
+        json={"isbn": "12345"},
+    )
+    assert res_bad_isbn.status_code == 422
+
+    # Verify listing remained completely unchanged through all invalid attempts
+    listing_check = db.query(Listing).filter_by(id=listing.id).one()
+    assert listing_check.condition_rank == 3
+    assert listing_check.location == "Room 303"
+    assert listing_check.status == "AVAILABLE"
+    assert listing_check.owner_id == owner.id
