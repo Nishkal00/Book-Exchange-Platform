@@ -6,7 +6,13 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -74,6 +80,32 @@ class UserOut(BaseModel):
     location: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProfileUpdateRequest(BaseModel):
+    """Only profile-editable fields are accepted."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="forbid",
+    )
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    department: str | None = Field(default=None, max_length=100)
+    location: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_update(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one profile field must be provided")
+
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("Name cannot be null")
+
+        if "location" in self.model_fields_set and self.location is None:
+            raise ValueError("Location cannot be null")
+
+        return self
 
 
 class LoginResponse(BaseModel):
@@ -292,3 +324,30 @@ def get_current_user(
         )
 
     return user
+
+
+@router.get("/me", response_model=UserOut)
+def get_my_profile(
+    current_user: User = Depends(get_current_user),  # noqa: B008
+):
+    """Return the authenticated student's profile (F-004)."""
+    return current_user
+
+
+@router.patch("/me", response_model=UserOut)
+def update_my_profile(
+    payload: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+):
+    """Partially update permitted profile fields (F-004)."""
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    for field, value in updates.items():
+        setattr(current_user, field, value)
+
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user
