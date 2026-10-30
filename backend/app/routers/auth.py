@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import (
@@ -13,7 +13,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -324,6 +324,23 @@ def get_current_user(
         )
 
     return user
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    current_user: User = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> Response:
+    """Invalidate all existing tokens for the current user (F-003).
+
+    Atomically increments token_version so every previously issued JWT fails the
+    version check in get_current_user.
+    """
+    db.execute(
+        update(User).where(User.id == current_user.id).values(token_version=User.token_version + 1)
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/me", response_model=UserOut)
