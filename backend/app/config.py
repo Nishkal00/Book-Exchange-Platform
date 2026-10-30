@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str = "postgresql+psycopg://bep:bep@localhost:5432/bep"
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173,http://localhost:5174"
     # Used by the Auth module (Sprint 1, BEP-10/11). Never commit a real secret.
     jwt_secret: str = "change-me-in-env"
     jwt_expire_minutes: int = 30

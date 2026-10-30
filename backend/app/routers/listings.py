@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
@@ -429,3 +429,35 @@ def update_listing(
         .where(Listing.id == listing_id)
     )
     return serialize_listing(updated)
+
+
+@router.delete("/{listing_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_listing(
+    listing_id: int,
+    current_user: User = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> None:
+    """Soft-delete a listing owned by the authenticated student (F-013)."""
+
+    listing = db.scalar(select(Listing).where(Listing.id == listing_id))
+
+    # Missing or already deleted listings return 404.
+    if listing is None or listing.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Listing not found",
+        )
+
+    # Only the listing owner can delete it.
+    if listing.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to delete this listing",
+        )
+
+    # Soft-delete: preserve the database record.
+    listing.deleted_at = datetime.now(UTC)
+
+    db.commit()
+
+    return None

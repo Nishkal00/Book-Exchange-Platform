@@ -19,7 +19,7 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-bep}:${POSTGRES_PASSWORD:-bep}@db:5432/${POSTGRES_DB:-bep}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-env}
       ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174}
     depends_on:
       db:
         condition: service_healthy

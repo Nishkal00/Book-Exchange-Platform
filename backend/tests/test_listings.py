@@ -1441,3 +1441,109 @@ def test_tc_prf_02_listing_privilege_escalation_rejected(client, db):
     assert listing_check.location == "Room 303"
     assert listing_check.status == "AVAILABLE"
     assert listing_check.owner_id == owner.id
+
+
+# ==============================================================================
+# TC-LST-06: Owner soft-deletes listing (F-013)
+# ==============================================================================
+
+
+def test_tc_lst_06_owner_soft_deletes_listing(client, db):
+    """Owner deletes listing -> 204 and deleted_at is persisted."""
+
+    owner = create_test_user(db, email="delete_owner@example.edu")
+    token = create_auth_token(owner)
+    listing = create_test_listing(
+        db,
+        owner=owner,
+        title="Database Systems",
+        author="Author A",
+        isbn="9780000000991",
+    )
+
+    response = client.delete(
+        f"/api/v1/listings/{listing.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 204
+    assert response.content == b""
+
+    db.expire_all()
+    deleted_listing = db.query(Listing).filter_by(id=listing.id).one()
+    assert deleted_listing.deleted_at is not None
+
+
+# ==============================================================================
+# TC-LST-07: Delete authorization and deleted listing visibility (F-013)
+# ==============================================================================
+
+
+def test_tc_lst_07_delete_authorization_and_visibility(client, db):
+    """Non-owner receives 403; missing/deleted IDs return 404.
+    Soft-deleted listings are excluded from Browse and My Listings.
+    """
+
+    owner = create_test_user(db, email="delete_visibility_owner@example.edu")
+    other_student = create_test_user(db, email="delete_visibility_other@example.edu")
+
+    owner_token = create_auth_token(owner)
+    other_token = create_auth_token(other_student)
+
+    headers_owner = {"Authorization": f"Bearer {owner_token}"}
+    headers_other = {"Authorization": f"Bearer {other_token}"}
+
+    listing = create_test_listing(
+        db,
+        owner=owner,
+        title="Computer Networks",
+        author="Author B",
+        isbn="9780000000992",
+    )
+
+    # Non-owner cannot delete another student's listing.
+    response_forbidden = client.delete(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers_other,
+    )
+    assert response_forbidden.status_code == 403
+
+    db.expire_all()
+    unchanged_listing = db.query(Listing).filter_by(id=listing.id).one()
+    assert unchanged_listing.deleted_at is None
+
+    # Missing listing returns 404.
+    response_missing = client.delete(
+        "/api/v1/listings/999999",
+        headers=headers_owner,
+    )
+    assert response_missing.status_code == 404
+
+    # Owner deletes the listing.
+    response_deleted = client.delete(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers_owner,
+    )
+    assert response_deleted.status_code == 204
+
+    # Repeated deletion returns 404.
+    response_repeated = client.delete(
+        f"/api/v1/listings/{listing.id}",
+        headers=headers_owner,
+    )
+    assert response_repeated.status_code == 404
+
+    # Deleted listing is excluded from public Browse.
+    response_browse = client.get("/api/v1/listings")
+    assert response_browse.status_code == 200
+    browse_ids = [item["id"] for item in response_browse.json()["items"]]
+    assert listing.id not in browse_ids
+
+    # Deleted listing is excluded from owner's My Listings.
+    response_mine = client.get(
+        "/api/v1/listings/mine",
+        headers=headers_owner,
+    )
+    assert response_mine.status_code == 200
+    mine_ids = [item["id"] for item in response_mine.json()["items"]]
+    assert listing.id not in mine_ids
