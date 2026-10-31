@@ -9,7 +9,7 @@ services:
     healthCheckPath: /health
     plan: free
     # Free instances do not support preDeployCommand, so migrations run at container start.
-    dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+    dockerCommand: sh ./start.sh
     envVars:
       - key: DATABASE_URL
         fromDatabase:
