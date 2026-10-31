@@ -52,8 +52,8 @@ def setup_client(db):
     app.dependency_overrides[get_db] = override_db
     return TestClient(app)
 
-
-def test_get_my_profile_success(db):
+# TC-PRF-01: View profile and verify profile updates persist.
+def test_tc_prf_01_get_my_profile_success(db):
     user = create_profile_user(db)
     token = create_profile_token(user)
     client = setup_client(db)
@@ -150,8 +150,8 @@ def test_update_my_profile_allows_partial_update(db):
     finally:
         app.dependency_overrides.clear()
 
-
-def test_update_my_profile_rejects_protected_fields(db):
+# TC-PRF-02: Reject protected profile fields and prevent privilege escalation.
+def test_tc_prf_02_update_my_profile_rejects_protected_fields(db):
     user = create_profile_user(db)
     token = create_profile_token(user)
     client = setup_client(db)

@@ -1351,14 +1351,12 @@ def test_tc_sec_05_update_listing_ownership_enforcement(client, db):
 
 
 # ==============================================================================
-# TC-PRF-02: Privilege escalation rejection and field validation on mutations (SR-005)
+# Listing mutation: reject protected user fields and validate input.
 # ==============================================================================
 
 
-def test_tc_prf_02_listing_privilege_escalation_rejected(client, db):
-    """TC-PRF-02 (SR-005): PUT role=admin, email, active or password_hash.
-    Expect 422 and unchanged protected fields. Field validation limits enforced.
-    """
+def test_listing_privilege_escalation_rejected(client, db):
+    """Reject protected user fields submitted through listing updates."""
     owner = create_test_user(db, email="priv_escalation@example.edu")
     token = create_auth_token(owner)
     headers = {"Authorization": f"Bearer {token}"}
