@@ -20,10 +20,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.config import get_settings
 from app.database import Base, get_db
 from app.main import app
-from app.models import Book, BorrowRequest, Exchange, Listing, Match, User
+from app.models import Book, BorrowRequest, Exchange, Listing, Match, Notification, User
 from app.services.matching import (
     calculate_match_score,
     calculate_trigram_similarity,
+    handle_match_decision,
+    recompute_matches_for_request,
 )
 
 
@@ -709,3 +711,258 @@ def test_real_active_exchange_delete_guard(client: TestClient, db: Session):
     res_del = client.delete(f"/api/v1/listings/{listing.id}", headers=owner_headers)
     assert res_del.status_code == 409
     assert "ACTIVE_EXCHANGE" in str(res_del.json())
+
+
+def test_new_match_creates_notifications_for_both_participants(db: Session):
+    """A newly created match notifies borrower and listing owner."""
+    borrower = create_user(db, "borrower_notification@stu.pes.edu")
+    lender = create_user(db, "lender_notification@stu.pes.edu")
+
+    create_book_and_listing(
+        db,
+        owner=lender,
+        title="Database System Concepts",
+        author="Silberschatz",
+        isbn="9780073523323",
+        condition_rank=4,
+        location="Campus Center",
+    )
+
+    request = BorrowRequest(
+        borrower_id=borrower.id,
+        isbn="9780073523323",
+        location="Campus Center",
+        status="OPEN",
+    )
+    db.add(request)
+    db.commit()
+    db.refresh(request)
+
+    matches = recompute_matches_for_request(db, request)
+
+    assert len(matches) == 1
+
+    notifications = (
+        db.query(Notification)
+        .filter(Notification.event_key == f"match:{matches[0].id}:found")
+        .all()
+    )
+
+    assert len(notifications) == 2
+    assert {n.user_id for n in notifications} == {borrower.id, lender.id}
+    assert all(n.event_type == "MATCH_FOUND" for n in notifications)
+
+
+def test_recomputing_existing_match_does_not_duplicate_notifications(
+    db: Session,
+):
+    """Repeated matching recomputation must not duplicate MATCH_FOUND notifications."""
+    borrower = create_user(db, "borrower_repeat@stu.pes.edu")
+    lender = create_user(db, "lender_repeat@stu.pes.edu")
+
+    create_book_and_listing(
+        db,
+        owner=lender,
+        title="Database System Concepts",
+        author="Silberschatz",
+        isbn="9780073523323",
+        condition_rank=4,
+        location="Campus Center",
+    )
+
+    request = BorrowRequest(
+        borrower_id=borrower.id,
+        isbn="9780073523323",
+        location="Campus Center",
+        status="OPEN",
+    )
+    db.add(request)
+    db.commit()
+    db.refresh(request)
+
+    first_matches = recompute_matches_for_request(db, request)
+    second_matches = recompute_matches_for_request(db, request)
+
+    assert len(first_matches) == 1
+    assert len(second_matches) == 1
+
+    count = (
+        db.query(Notification)
+        .filter(Notification.event_key == f"match:{first_matches[0].id}:found")
+        .count()
+    )
+
+    assert count == 2
+
+
+def test_acceptance_creates_partner_decision_notification(db: Session):
+    """An acceptance notifies the other match participant."""
+    borrower = create_user(db, "borrower_accept@stu.pes.edu")
+    lender = create_user(db, "lender_accept@stu.pes.edu")
+
+    listing = create_book_and_listing(
+        db,
+        owner=lender,
+        title="Database System Concepts",
+        author="Silberschatz",
+        isbn="9780073523323",
+        condition_rank=4,
+        location="Campus Center",
+    )
+
+    request = BorrowRequest(
+        borrower_id=borrower.id,
+        isbn="9780073523323",
+        location="Campus Center",
+        status="MATCHED",
+    )
+    db.add(request)
+    db.commit()
+    db.refresh(request)
+
+    match = Match(
+        request_id=request.id,
+        listing_id=listing.id,
+        score=100,
+        relevance=1,
+        status="PROPOSED",
+    )
+    db.add(match)
+    db.commit()
+    db.refresh(match)
+
+    handle_match_decision(
+        db,
+        match_id=match.id,
+        current_user_id=borrower.id,
+        decision="accept",
+    )
+
+    notification = (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == lender.id,
+            Notification.event_key == f"match:{match.id}:decision:{borrower.id}:accept",
+        )
+        .one()
+    )
+
+    assert notification.event_type == "PARTNER_DECISION"
+
+
+def test_decline_creates_partner_decision_notification(db: Session):
+    """A decline notifies the other match participant."""
+    borrower = create_user(db, "borrower_decline@stu.pes.edu")
+    lender = create_user(db, "lender_decline@stu.pes.edu")
+
+    listing = create_book_and_listing(
+        db,
+        owner=lender,
+        title="Database System Concepts",
+        author="Silberschatz",
+        isbn="9780073523323",
+        condition_rank=4,
+        location="Campus Center",
+    )
+
+    request = BorrowRequest(
+        borrower_id=borrower.id,
+        isbn="9780073523323",
+        location="Campus Center",
+        status="MATCHED",
+    )
+    db.add(request)
+    db.commit()
+    db.refresh(request)
+
+    match = Match(
+        request_id=request.id,
+        listing_id=listing.id,
+        score=100,
+        relevance=1,
+        status="PROPOSED",
+    )
+    db.add(match)
+    db.commit()
+    db.refresh(match)
+
+    handle_match_decision(
+        db,
+        match_id=match.id,
+        current_user_id=borrower.id,
+        decision="decline",
+    )
+
+    notification = (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == lender.id,
+            Notification.event_key == f"match:{match.id}:decision:{borrower.id}:decline",
+        )
+        .one()
+    )
+
+    assert notification.event_type == "PARTNER_DECISION"
+
+
+def test_mutual_acceptance_creates_exchange_notifications(db: Session):
+    """Mutual acceptance notifies both participants about the exchange."""
+    borrower = create_user(db, "borrower_exchange@stu.pes.edu")
+    lender = create_user(db, "lender_exchange@stu.pes.edu")
+
+    listing = create_book_and_listing(
+        db,
+        owner=lender,
+        title="Database System Concepts",
+        author="Silberschatz",
+        isbn="9780073523323",
+        condition_rank=4,
+        location="Campus Center",
+    )
+
+    request = BorrowRequest(
+        borrower_id=borrower.id,
+        isbn="9780073523323",
+        location="Campus Center",
+        status="MATCHED",
+    )
+    db.add(request)
+    db.commit()
+    db.refresh(request)
+
+    match = Match(
+        request_id=request.id,
+        listing_id=listing.id,
+        score=100,
+        relevance=1,
+        status="PROPOSED",
+    )
+    db.add(match)
+    db.commit()
+    db.refresh(match)
+
+    handle_match_decision(
+        db,
+        match_id=match.id,
+        current_user_id=borrower.id,
+        decision="accept",
+    )
+
+    result = handle_match_decision(
+        db,
+        match_id=match.id,
+        current_user_id=lender.id,
+        decision="accept",
+    )
+
+    assert result["status"] == "ACCEPTED"
+
+    notifications = (
+        db.query(Notification)
+        .filter(Notification.event_key == f"exchange:{result['exchangeId']}:state:ACCEPTED")
+        .all()
+    )
+
+    assert len(notifications) == 2
+    assert {n.user_id for n in notifications} == {borrower.id, lender.id}
+    assert all(n.event_type == "EXCHANGE_UPDATED" for n in notifications)
