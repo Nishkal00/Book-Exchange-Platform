@@ -46,7 +46,8 @@ Partially executed requirements remain N until all applicable tests are complete
 | F-010 | TC-LST-01, TC-LST-02, TC-SEC-04 | N | Deployed book listing successfully created and displayed. Remaining linked tests pending. |
 | F-011 | TC-LST-03, TC-LST-04, TC-LST-08 | N | Listing edit functionality manually verified. Remaining linked tests pending. |
 | F-012 | TC-LST-05, TC-SEC-05 | N | Availability changed from AVAILABLE to UNAVAILABLE and persisted after refresh. Security test pending. |
-| F-013 | TC-LST-06, TC-LST-07, TC-SEC-05 | N | Delete confirmation dialog verified. Cancellation tested; actual deletion not verified. |
+| F-013 | TC-LST-06, TC-LST-07, TC-SEC-05 | A | Soft delete returns 204. Active exchange delete guard verified with real database exchange (409 ACTIVE_EXCHANGE) in TC-LST-07 and test_matching.py. |
+| F-022 | TC-MAT-01, TC-MAT-02, TC-MAT-03 | A | Top-five ranking by score (ISBN/title relevance, location, condition), exclusions, locking on simultaneous mutual acceptances (409), decline/status change recomputation, and deterministic ties verified in automated suite (test_matching.py). |
 | NF-001 | TC-PERF-01 | N | Performance test not executed in this session. |
 | NF-002 | TC-OPS-01 | N | Operations test not fully verified in this session. |
 | NF-003 | TC-UX-01 | N | 360px layout and no horizontal overflow verified. Search empty state verified. Click-count, keyboard accessibility and validation-error checks remain pending. |

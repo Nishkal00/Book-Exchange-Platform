@@ -1,4 +1,4 @@
-"""Sprint 1 data model (SAD section 3.6): users, books, listings."""
+"""Data models (SAD section 3.6): users, books, listings, borrow_requests, matches, exchanges."""
 
 from datetime import datetime
 
@@ -12,12 +12,16 @@ from sqlalchemy import (
     Numeric,
     String,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
 LISTING_STATUSES = ("AVAILABLE", "UNAVAILABLE", "RESERVED", "ON_LOAN")
+BORROW_REQUEST_STATUSES = ("OPEN", "MATCHED", "FULFILLED", "CANCELLED")
+MATCH_STATUSES = ("PROPOSED", "ACCEPTED", "DECLINED", "EXPIRED")
+EXCHANGE_STATES = ("ACCEPTED", "ON_LOAN", "RETURNED", "CANCELLED")
 
 
 class User(Base):
@@ -40,6 +44,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     listings: Mapped[list["Listing"]] = relationship(back_populates="owner")
+    borrow_requests: Mapped[list["BorrowRequest"]] = relationship(back_populates="borrower")
 
 
 class Book(Base):
@@ -89,3 +94,111 @@ class Listing(Base):
 
     owner: Mapped[User] = relationship(back_populates="listings")
     book: Mapped[Book] = relationship(back_populates="listings")
+    matches: Mapped[list["Match"]] = relationship("Match", back_populates="listing")
+    exchanges: Mapped[list["Exchange"]] = relationship("Exchange", back_populates="listing")
+
+
+class BorrowRequest(Base):
+    __tablename__ = "borrow_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('OPEN', 'MATCHED', 'FULFILLED', 'CANCELLED')",
+            name="ck_borrow_requests_status",
+        ),
+        CheckConstraint(
+            "isbn IS NOT NULL OR (query IS NOT NULL AND length(trim(query)) > 0)",
+            name="ck_borrow_requests_criteria",
+        ),
+        Index("ix_borrow_requests_borrower_status", "borrower_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    borrower_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    isbn: Mapped[str | None] = mapped_column(String(13), index=True)
+    query: Mapped[str | None] = mapped_column(String(200))
+    location: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    status: Mapped[str] = mapped_column(
+        String(20), default="OPEN", server_default="OPEN", index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    borrower: Mapped[User] = relationship("User", back_populates="borrow_requests")
+    matches: Mapped[list["Match"]] = relationship("Match", back_populates="request")
+    exchanges: Mapped[list["Exchange"]] = relationship("Exchange", back_populates="request")
+
+
+class Match(Base):
+    __tablename__ = "matches"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PROPOSED', 'ACCEPTED', 'DECLINED', 'EXPIRED')",
+            name="ck_matches_status",
+        ),
+        Index("ix_matches_request_listing", "request_id", "listing_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("borrow_requests.id"), index=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listings.id"), index=True)
+    score: Mapped[float] = mapped_column(Numeric(5, 2))
+    relevance: Mapped[float] = mapped_column(Numeric(5, 2), default=1.0, server_default="1.0")
+    borrower_accepted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    lender_accepted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    status: Mapped[str] = mapped_column(
+        String(20), default="PROPOSED", server_default="PROPOSED", index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    request: Mapped[BorrowRequest] = relationship("BorrowRequest", back_populates="matches")
+    listing: Mapped[Listing] = relationship("Listing", back_populates="matches")
+    exchange: Mapped["Exchange | None"] = relationship(
+        "Exchange", back_populates="match", uselist=False
+    )
+
+
+class Exchange(Base):
+    __tablename__ = "exchanges"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('ACCEPTED', 'ON_LOAN', 'RETURNED', 'CANCELLED')",
+            name="ck_exchanges_state",
+        ),
+        Index(
+            "uq_active_exchange_listing",
+            "listing_id",
+            unique=True,
+            sqlite_where=text("state IN ('ACCEPTED', 'ON_LOAN')"),
+            postgresql_where=text("state IN ('ACCEPTED', 'ON_LOAN')"),
+        ),
+        Index(
+            "uq_active_exchange_request",
+            "request_id",
+            unique=True,
+            sqlite_where=text("state IN ('ACCEPTED', 'ON_LOAN')"),
+            postgresql_where=text("state IN ('ACCEPTED', 'ON_LOAN')"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"), unique=True, index=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("borrow_requests.id"), index=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listings.id"), index=True)
+    state: Mapped[str] = mapped_column(
+        String(20), default="ACCEPTED", server_default="ACCEPTED", index=True
+    )
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    handover_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    borrower_return_confirmed: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    lender_return_confirmed: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    returned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    match: Mapped[Match] = relationship("Match", back_populates="exchange")
+    request: Mapped[BorrowRequest] = relationship("BorrowRequest", back_populates="exchanges")
+    listing: Mapped[Listing] = relationship("Listing", back_populates="exchanges")
