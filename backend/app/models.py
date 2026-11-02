@@ -89,3 +89,38 @@ class Listing(Base):
 
     owner: Mapped[User] = relationship(back_populates="listings")
     book: Mapped[Book] = relationship(back_populates="listings")
+
+
+class BorrowRequest(Base):
+    """A student's request to borrow a book."""
+
+    __tablename__ = "borrow_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    isbn: Mapped[str | None] = mapped_column(String(13), nullable=True)
+    title_query: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    location: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="OPEN", server_default="OPEN"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    student: Mapped["User"] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(
+            "(isbn IS NOT NULL AND title_query IS NULL) OR "
+            "(isbn IS NULL AND title_query IS NOT NULL)",
+            name="ck_borrow_requests_one_criterion",
+        ),
+        CheckConstraint(
+            "status IN ('OPEN', 'FULFILLED', 'CANCELLED')",
+            name="ck_borrow_requests_status",
+        ),
+        CheckConstraint("length(location) BETWEEN 1 AND 100", name="ck_borrow_requests_location"),
+        Index("ix_borrow_requests_student_id", "student_id"),
+        Index("ix_borrow_requests_status", "status"),
+    )
