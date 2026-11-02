@@ -26,7 +26,7 @@ The SAD identifies the following deviations from the original design.
 | ID | Area | Planned Deviation | Description | Status |
 |---|---|---|---|---|
 | DEV-01 | Rate Limiting | In-memory rate limiter | Sprint 1 uses an in-memory rate limiter as a temporary implementation instead of a distributed rate-limiting mechanism. | Planned limitation; current implementation requires confirmation |
-| DEV-02 | Exchange Workflow | Active-exchange stub | Sprint 1 includes a temporary active-exchange implementation that requires further review and completion. | Planned limitation; current implementation requires confirmation |
+| DEV-02 | Exchange Workflow | Active-exchange stub | Sprint 1 temporary active-exchange stub replaced in Sprint 2 (BEP-26) with real database queries against exchanges table and unique partial indexes. | Resolved in Sprint 2 (BEP-26) |
 
 These items are documented in SAD Section 4.5 and its planned deviations.
 

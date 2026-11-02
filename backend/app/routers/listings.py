@@ -162,11 +162,23 @@ def serialize_listing(listing: Listing) -> ListingOut:
 def has_active_exchange(listing_id: int, db: Session | None = None) -> bool:
     """Check if listing is involved in an active exchange (F-013).
 
-    Sprint 1 stub: The exchanges table arrives in Sprint 2.
-    Defaults to False so idle listings can be soft-deleted.
-    Can be monkeypatched in tests (e.g. TC-LST-07).
+    Sprint 2: queries real exchanges table for active states (ACCEPTED, ON_LOAN).
+    Defaults to False if db is not provided.
+    Can still be monkeypatched in tests (e.g. TC-LST-07).
     """
-    return False
+    if db is None:
+        return False
+    from app.models import Exchange
+
+    count = (
+        db.query(Exchange)
+        .filter(
+            Exchange.listing_id == listing_id,
+            Exchange.state.in_(["ACCEPTED", "ON_LOAN"]),
+        )
+        .count()
+    )
+    return count > 0
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=ListingOut)
