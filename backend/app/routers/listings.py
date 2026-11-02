@@ -256,7 +256,7 @@ def get_my_listings(
         .offset((page - 1) * size)
         .limit(size)
     )
-    listings = db.scalars(paginated_stmt).all()
+    listings = db.scalars(paginated_stmt).unique().all()
 
     items = [serialize_listing(item) for item in listings]
 
@@ -322,7 +322,7 @@ def search_listings(
         .offset((page - 1) * size)
         .limit(size)
     )
-    listings = db.scalars(paginated_stmt).all()
+    listings = db.scalars(paginated_stmt).unique().all()
 
     items = [serialize_listing(item) for item in listings]
 

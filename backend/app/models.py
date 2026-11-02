@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -46,6 +47,8 @@ class Book(Base):
     __table_args__ = (
         CheckConstraint("length(title) BETWEEN 1 AND 200", name="ck_books_title_length"),
         CheckConstraint("length(author) BETWEEN 1 AND 200", name="ck_books_author_length"),
+        Index("ix_books_title", "title"),
+        Index("ix_books_author", "author"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -64,6 +67,13 @@ class Listing(Base):
             "status IN ('AVAILABLE', 'UNAVAILABLE', 'RESERVED', 'ON_LOAN')",
             name="ck_listings_status",
         ),
+        Index(
+            "ix_listings_status_deleted_created",
+            "status",
+            "deleted_at",
+            "created_at",
+        ),
+        Index("ix_listings_location", "location"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

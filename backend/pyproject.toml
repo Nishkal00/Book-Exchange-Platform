@@ -11,7 +11,7 @@ known-third-party = ["alembic"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "--cov=app --cov-report=term-missing --cov-fail-under=70"
+addopts = "-p no:locust --cov=app --cov-report=term-missing --cov-fail-under=70"
 
 [tool.coverage.run]
 omit = ["app/__init__.py"]
