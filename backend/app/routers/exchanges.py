@@ -1,4 +1,4 @@
-"""Exchanges router: history, contact disclosure, due date, handover (F-024, F-025, SR-007)."""
+"""Exchanges router: history, contact disclosure, due date, handover and cancellation."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, computed_field
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -15,6 +15,11 @@ from app.routers.auth import get_current_user
 from app.services.notifications import create_notification
 
 router = APIRouter(prefix="/api/v1/exchanges", tags=["exchanges"])
+
+
+# ---------------------------------------------------------------------------
+# Request and response schemas
+# ---------------------------------------------------------------------------
 
 
 class DueDatePayload(BaseModel):
@@ -53,7 +58,7 @@ class ExchangeOut(BaseModel):
 
 
 class PartnerContactOut(BaseModel):
-    """Partner contact details disclosed ONLY after mutual acceptance (SR-007 / F-024)."""
+    """Partner contact details disclosed only to exchange participants."""
 
     user_id: int
     name: str
@@ -68,7 +73,7 @@ class PartnerContactOut(BaseModel):
 
 
 class ExchangeHistoryOut(BaseModel):
-    """Exchange history item for participant (SAD 4.3.1 / F-030)."""
+    """Legacy exchange history response retained for API compatibility."""
 
     id: int
     match_id: int
@@ -123,20 +128,58 @@ class ExchangeHistoryOut(BaseModel):
         return self.created_at
 
 
+class ExchangeHistoryItem(ExchangeHistoryOut):
+    """Expanded exchange history item returned by the paginated endpoint."""
+
+    book_author: str
+    partner_display_name: str
+    handover_confirmed_at: datetime | None = None
+    returned_at: datetime | None = None
+    cancelled_at: datetime | None = None
+
+
+class ExchangeHistoryResponse(BaseModel):
+    """Paginated exchange history response."""
+
+    items: list[ExchangeHistoryItem]
+    total: int
+    limit: int
+    offset: int
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
 def _load_exchange(db: Session, exchange_id: int, user: User) -> Exchange:
-    """Return the exchange only to its participants; others get 404 (no existence leak)."""
+    """Load an exchange only if the requesting user is a participant."""
+
     exchange = db.execute(
         select(Exchange).where(Exchange.id == exchange_id).with_for_update()
     ).scalar_one_or_none()
+
     if exchange is None or user.id not in (
         exchange.request.borrower_id,
         exchange.listing.owner_id,
     ):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="EXCHANGE_NOT_FOUND")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="EXCHANGE_NOT_FOUND",
+        )
+
     return exchange
 
 
-def _record(db: Session, exchange: Exchange, actor: User, event_type: str, to_state: str) -> None:
+def _record(
+    db: Session,
+    exchange: Exchange,
+    actor: User,
+    event_type: str,
+    to_state: str,
+) -> None:
+    """Record an exchange state-transition event."""
+
     db.add(
         ExchangeEvent(
             exchange_id=exchange.id,
@@ -148,8 +191,18 @@ def _record(db: Session, exchange: Exchange, actor: User, event_type: str, to_st
     )
 
 
-def _notify(db: Session, exchange: Exchange, state: str, message: str) -> None:
-    for user_id in (exchange.request.borrower_id, exchange.listing.owner_id):
+def _notify(
+    db: Session,
+    exchange: Exchange,
+    state: str,
+    message: str,
+) -> None:
+    """Notify both exchange participants."""
+
+    for user_id in (
+        exchange.request.borrower_id,
+        exchange.listing.owner_id,
+    ):
         create_notification(
             db,
             user_id=user_id,
@@ -160,15 +213,21 @@ def _notify(db: Session, exchange: Exchange, state: str, message: str) -> None:
 
 
 def _serialize(db: Session, exchange: Exchange) -> ExchangeOut:
+    """Serialize an exchange with its event history."""
+
     events = (
         db.execute(
             select(ExchangeEvent)
             .where(ExchangeEvent.exchange_id == exchange.id)
-            .order_by(ExchangeEvent.created_at, ExchangeEvent.id)
+            .order_by(
+                ExchangeEvent.created_at,
+                ExchangeEvent.id,
+            )
         )
         .scalars()
         .all()
     )
+
     return ExchangeOut(
         id=exchange.id,
         request_id=exchange.request_id,
@@ -179,78 +238,118 @@ def _serialize(db: Session, exchange: Exchange) -> ExchangeOut:
         due_at=exchange.due_at,
         handover_confirmed_at=exchange.handover_confirmed_at,
         cancelled_at=exchange.cancelled_at,
-        events=[ExchangeEventOut.model_validate(e) for e in events],
+        events=[ExchangeEventOut.model_validate(event) for event in events],
     )
 
 
 def _require_state(exchange: Exchange, *allowed: str) -> None:
+    """Reject operations that are invalid for the current exchange state."""
+
     if exchange.state not in allowed:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="INVALID_EXCHANGE_STATE")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="INVALID_EXCHANGE_STATE",
+        )
 
 
-@router.get("", response_model=list[ExchangeHistoryOut])
+# ---------------------------------------------------------------------------
+# F-030: Exchange history
+# ---------------------------------------------------------------------------
+
+
+@router.get("", response_model=ExchangeHistoryResponse)
 def get_my_exchanges(
+    limit: int = 20,
+    offset: int = 0,
     current_user: User = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
-) -> list[ExchangeHistoryOut]:
-    """Return paginated/list exchange history for authenticated participant (SAD 4.3.1).
+) -> ExchangeHistoryResponse:
+    """Return paginated exchange history for the authenticated participant."""
 
-    Omits private contact information in list view (SR-007).
-    """
+    if not 1 <= limit <= 100:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="LIMIT_MUST_BE_BETWEEN_1_AND_100",
+        )
+
+    if offset < 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="OFFSET_MUST_BE_NON_NEGATIVE",
+        )
+
+    participant_filter = or_(
+        Exchange.request.has(BorrowRequest.borrower_id == current_user.id),
+        Exchange.listing.has(Listing.owner_id == current_user.id),
+    )
+
+    total = db.query(func.count(Exchange.id)).filter(participant_filter).scalar() or 0
+
     exchanges = (
         db.query(Exchange)
-        .join(Exchange.request)
-        .join(Exchange.listing)
-        .filter(
-            (BorrowRequest.borrower_id == current_user.id) | (Listing.owner_id == current_user.id)
-        )
+        .filter(participant_filter)
         .options(
             joinedload(Exchange.request).joinedload(BorrowRequest.borrower),
             joinedload(Exchange.listing).joinedload(Listing.owner),
             joinedload(Exchange.listing).joinedload(Listing.book),
         )
-        .order_by(Exchange.created_at.desc())
+        .order_by(
+            Exchange.created_at.desc(),
+            Exchange.id.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
         .all()
     )
 
-    my_exchanges: list[ExchangeHistoryOut] = []
-    for ex in exchanges:
-        borrower = ex.request.borrower
-        lender = ex.listing.owner
-        if current_user.id == borrower.id:
-            my_exchanges.append(
-                ExchangeHistoryOut(
-                    id=ex.id,
-                    match_id=ex.match_id,
-                    request_id=ex.request_id,
-                    listing_id=ex.listing_id,
-                    state=ex.state,
-                    partner_id=lender.id,
-                    partner_name=lender.name,
-                    role="borrower",
-                    book_title=ex.listing.book.title,
-                    due_at=ex.due_at,
-                    created_at=ex.created_at,
-                )
-            )
-        elif current_user.id == lender.id:
-            my_exchanges.append(
-                ExchangeHistoryOut(
-                    id=ex.id,
-                    match_id=ex.match_id,
-                    request_id=ex.request_id,
-                    listing_id=ex.listing_id,
-                    state=ex.state,
-                    partner_id=borrower.id,
-                    partner_name=borrower.name,
-                    role="lender",
-                    book_title=ex.listing.book.title,
-                    due_at=ex.due_at,
-                    created_at=ex.created_at,
-                )
-            )
+    items = []
 
-    return my_exchanges
+    for exchange in exchanges:
+        borrower = exchange.request.borrower
+        lender = exchange.listing.owner
+        book = exchange.listing.book
+
+        if current_user.id == borrower.id:
+            partner = lender
+            role = "borrower"
+        elif current_user.id == lender.id:
+            partner = borrower
+            role = "lender"
+        else:
+            continue
+
+        items.append(
+            ExchangeHistoryItem(
+                id=exchange.id,
+                match_id=exchange.match_id,
+                request_id=exchange.request_id,
+                listing_id=exchange.listing_id,
+                state=exchange.state,
+                partner_id=partner.id,
+                partner_name=partner.name,
+                role=role,
+                book_title=book.title,
+                book_author=book.author,
+                partner_display_name=partner.name,
+                created_at=exchange.created_at,
+                due_at=exchange.due_at,
+                handover_confirmed_at=exchange.handover_confirmed_at,
+                returned_at=exchange.returned_at,
+                cancelled_at=exchange.cancelled_at,
+            )
+        )
+
+    return ExchangeHistoryResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Exchange details
+# ---------------------------------------------------------------------------
 
 
 @router.get("/{exchange_id}", response_model=ExchangeOut)
@@ -259,22 +358,33 @@ def get_exchange(
     current_user: User = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> ExchangeOut:
+    """Return exchange details to one of its participants."""
+
     exchange = _load_exchange(db, exchange_id, current_user)
     return _serialize(db, exchange)
 
 
-@router.get("/{exchange_id}/contact", response_model=PartnerContactOut)
+# ---------------------------------------------------------------------------
+# F-024: Partner contact disclosure
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/{exchange_id}/contact",
+    response_model=PartnerContactOut,
+)
 def get_exchange_partner_contact(
     exchange_id: int,
     current_user: User = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> PartnerContactOut:
-    """Disclose partner contact details ONLY after mutual acceptance (F-024, SR-007, TC-SEC-07).
-
-    - Non-participants receive 403 Forbidden.
-    - Cancelled exchanges lose contact access (403 Forbidden).
-    - Unmutually accepted or non-existent exchanges return 404.
     """
+    Disclose partner contact details only to exchange participants.
+
+    Non-participants receive 403.
+    Cancelled exchanges revoke contact access.
+    """
+
     exchange = (
         db.query(Exchange)
         .options(
@@ -303,7 +413,6 @@ def get_exchange_partner_contact(
             detail="Not authorized to view contact for this exchange",
         )
 
-    # SR-007 / TC-SEC-07: Cancellation revokes contact access
     if exchange.state == "CANCELLED":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -321,81 +430,154 @@ def get_exchange_partner_contact(
     )
 
 
-@router.put("/{exchange_id}/due-date", response_model=ExchangeOut)
+# ---------------------------------------------------------------------------
+# F-025: Due date
+# ---------------------------------------------------------------------------
+
+
+@router.put(
+    "/{exchange_id}/due-date",
+    response_model=ExchangeOut,
+)
 def set_due_date(
     exchange_id: int,
     payload: DueDatePayload,
     current_user: User = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> ExchangeOut:
-    """Record the agreed future due date for an ACCEPTED exchange (either participant)."""
+    """Record the agreed future due date for an ACCEPTED exchange."""
+
     exchange = _load_exchange(db, exchange_id, current_user)
     _require_state(exchange, "ACCEPTED")
 
     due_at = payload.due_at
+
     if due_at.tzinfo is None:
         due_at = due_at.replace(tzinfo=UTC)
+
     if due_at <= datetime.now(UTC):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="DUE_DATE_NOT_IN_FUTURE"
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="DUE_DATE_NOT_IN_FUTURE",
         )
 
     exchange.due_at = due_at
-    _record(db, exchange, current_user, "DUE_DATE_SET", exchange.state)
+
+    _record(
+        db,
+        exchange,
+        current_user,
+        "DUE_DATE_SET",
+        exchange.state,
+    )
+
     db.commit()
+
     return _serialize(db, exchange)
 
 
-@router.post("/{exchange_id}/handover", response_model=ExchangeOut)
+# ---------------------------------------------------------------------------
+# F-025: Handover
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{exchange_id}/handover",
+    response_model=ExchangeOut,
+)
 def confirm_handover(
     exchange_id: int,
     current_user: User = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> ExchangeOut:
-    """Lender confirms handover: ACCEPTED -> ON_LOAN (requires an agreed due date)."""
-    exchange = _load_exchange(db, exchange_id, current_user)
-    if current_user.id != exchange.listing.owner_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="LENDER_ONLY")
-    _require_state(exchange, "ACCEPTED")
-    if exchange.due_at is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="DUE_DATE_REQUIRED")
+    """Lender confirms handover: ACCEPTED -> ON_LOAN."""
 
-    _record(db, exchange, current_user, "HANDOVER_CONFIRMED", "ON_LOAN")
+    exchange = _load_exchange(db, exchange_id, current_user)
+
+    if current_user.id != exchange.listing.owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="LENDER_ONLY",
+        )
+
+    _require_state(exchange, "ACCEPTED")
+
+    if exchange.due_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="DUE_DATE_REQUIRED",
+        )
+
+    _record(
+        db,
+        exchange,
+        current_user,
+        "HANDOVER_CONFIRMED",
+        "ON_LOAN",
+    )
+
     exchange.state = "ON_LOAN"
     exchange.handover_confirmed_at = datetime.now(UTC)
     exchange.listing.status = "ON_LOAN"
+
     _notify(
         db,
         exchange,
         "ON_LOAN",
         f"'{exchange.listing.book.title}' has been handed over and is now on loan.",
     )
+
     db.commit()
+
     return _serialize(db, exchange)
 
 
-@router.post("/{exchange_id}/cancel", response_model=ExchangeOut)
+# ---------------------------------------------------------------------------
+# F-025: Cancellation
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{exchange_id}/cancel",
+    response_model=ExchangeOut,
+)
 def cancel_exchange(
     exchange_id: int,
     current_user: User = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> ExchangeOut:
-    """Either participant may cancel before handover; cancelling after handover is rejected."""
+    """Either participant may cancel before handover."""
+
     exchange = _load_exchange(db, exchange_id, current_user)
+
     if exchange.state == "ON_LOAN":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CANCEL_AFTER_HANDOVER")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="CANCEL_AFTER_HANDOVER",
+        )
+
     _require_state(exchange, "ACCEPTED")
 
-    _record(db, exchange, current_user, "CANCELLED", "CANCELLED")
+    _record(
+        db,
+        exchange,
+        current_user,
+        "CANCELLED",
+        "CANCELLED",
+    )
+
     exchange.state = "CANCELLED"
     exchange.cancelled_at = datetime.now(UTC)
     exchange.listing.status = "AVAILABLE"
     exchange.request.status = "OPEN"
+
     _notify(
         db,
         exchange,
         "CANCELLED",
         f"The exchange for '{exchange.listing.book.title}' was cancelled before handover.",
     )
+
     db.commit()
+
     return _serialize(db, exchange)

@@ -8,6 +8,7 @@ Covers:
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -144,7 +145,7 @@ def create_proposed_match(
 
 
 @pytest.fixture
-def client(db: Session) -> TestClient:
+def client(db: Session) -> Generator[TestClient, None, None]:
     """TestClient fixture with dependency override for get_db."""
     app.dependency_overrides[get_db] = lambda: db
     with TestClient(app) as test_client:
@@ -720,26 +721,45 @@ def test_tc_sec_07_exchange_history_omits_private_contact_details(client: TestCl
         f"/api/v1/matches/{match.id}/decision", json={"decision": "accept"}, headers=lender_headers
     )
 
-    # Borrower queries history
-    b_hist = client.get("/api/v1/exchanges", headers=borrower_headers)
+    # Borrower queries paginated history
+    b_hist = client.get(
+        "/api/v1/exchanges?limit=20&offset=0",
+        headers=borrower_headers,
+    )
     assert b_hist.status_code == 200
-    items = b_hist.json()
-    assert len(items) == 1
-    item = items[0]
+    borrower_body = b_hist.json()
+
+    assert borrower_body["total"] == 1
+    assert borrower_body["limit"] == 20
+    assert borrower_body["offset"] == 0
+    assert len(borrower_body["items"]) == 1
+
+    item = borrower_body["items"][0]
     assert item["role"] == "borrower"
     assert item["partnerId"] == lender.id
     assert item["partnerName"] == lender.name
     assert item["bookTitle"] == "Discrete Mathematics"
     assert "email" not in item
     assert "department" not in item
+    assert "password_hash" not in item
 
-    # Lender queries history
-    l_hist = client.get("/api/v1/exchanges", headers=lender_headers)
+    # Lender queries paginated history
+    l_hist = client.get(
+        "/api/v1/exchanges?limit=20&offset=0",
+        headers=lender_headers,
+    )
     assert l_hist.status_code == 200
-    l_items = l_hist.json()
-    assert len(l_items) == 1
-    l_item = l_items[0]
+    lender_body = l_hist.json()
+
+    assert lender_body["total"] == 1
+    assert lender_body["limit"] == 20
+    assert lender_body["offset"] == 0
+    assert len(lender_body["items"]) == 1
+
+    l_item = lender_body["items"][0]
     assert l_item["role"] == "lender"
     assert l_item["partnerId"] == borrower.id
     assert l_item["partnerName"] == borrower.name
     assert "email" not in l_item
+    assert "department" not in l_item
+    assert "password_hash" not in l_item

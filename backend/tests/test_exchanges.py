@@ -188,3 +188,161 @@ def test_cannot_change_due_date_after_cancel(client, world):
         f"{base}/due-date", json={"due_at": future()}, headers=auth(world["lender"])
     )
     assert response.status_code == 409
+
+
+def test_exchange_history_returns_borrower_and_lender_records(client, world):
+    borrower_response = client.get(
+        "/api/v1/exchanges",
+        headers=auth(world["borrower"]),
+    )
+    lender_response = client.get(
+        "/api/v1/exchanges",
+        headers=auth(world["lender"]),
+    )
+
+    assert borrower_response.status_code == 200
+    assert lender_response.status_code == 200
+
+    borrower_body = borrower_response.json()
+    lender_body = lender_response.json()
+
+    assert borrower_body["total"] == 1
+    assert lender_body["total"] == 1
+
+    borrower_item = borrower_body["items"][0]
+    lender_item = lender_body["items"][0]
+
+    assert borrower_item["partner_id"] == world["lender"].id
+    assert borrower_item["partner_display_name"] == world["lender"].name
+
+    assert lender_item["partner_id"] == world["borrower"].id
+    assert lender_item["partner_display_name"] == world["borrower"].name
+
+
+def test_exchange_history_does_not_expose_other_students_exchanges(client, world):
+    response = client.get(
+        "/api/v1/exchanges",
+        headers=auth(world["outsider"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+    assert response.json()["total"] == 0
+
+
+def test_exchange_history_includes_book_dates_and_state(client, world):
+    response = client.get(
+        "/api/v1/exchanges",
+        headers=auth(world["borrower"]),
+    )
+
+    assert response.status_code == 200
+
+    item = response.json()["items"][0]
+
+    assert item["id"] == world["exchange"].id
+    assert item["book_title"] == "The C Programming Language"
+    assert item["book_author"] == "K&R"
+    assert item["state"] == "ACCEPTED"
+    assert item["created_at"] is not None
+    assert item["due_at"] is None
+    assert item["handover_confirmed_at"] is None
+    assert item["returned_at"] is None
+    assert item["cancelled_at"] is None
+
+
+def test_exchange_history_supports_pagination(client, world, db):
+    second_book = Book(
+        isbn="9780132350884",
+        title="Clean Code",
+        author="Robert C. Martin",
+    )
+    db.add(second_book)
+    db.flush()
+
+    second_listing = Listing(
+        owner_id=world["lender"].id,
+        book_id=second_book.id,
+        condition_rank=1,
+        location="Campus",
+        status="RESERVED",
+    )
+    second_request = BorrowRequest(
+        borrower_id=world["borrower"].id,
+        isbn="9780132350884",
+        location="Campus",
+        status="FULFILLED",
+    )
+    db.add_all([second_listing, second_request])
+    db.flush()
+
+    second_match = Match(
+        request_id=second_request.id,
+        listing_id=second_listing.id,
+        score=85,
+        borrower_accepted=True,
+        lender_accepted=True,
+        status="ACCEPTED",
+    )
+    db.add(second_match)
+    db.flush()
+
+    second_exchange = Exchange(
+        match_id=second_match.id,
+        request_id=second_request.id,
+        listing_id=second_listing.id,
+        state="ACCEPTED",
+    )
+    db.add(second_exchange)
+    db.commit()
+
+    first_page = client.get(
+        "/api/v1/exchanges?limit=1&offset=0",
+        headers=auth(world["borrower"]),
+    )
+    second_page = client.get(
+        "/api/v1/exchanges?limit=1&offset=1",
+        headers=auth(world["borrower"]),
+    )
+
+    assert first_page.status_code == 200
+    assert second_page.status_code == 200
+    assert first_page.json()["total"] == 2
+    assert second_page.json()["total"] == 2
+    assert len(first_page.json()["items"]) == 1
+    assert len(second_page.json()["items"]) == 1
+
+    assert first_page.json()["items"][0]["id"] != second_page.json()["items"][0]["id"]
+
+
+def test_exchange_history_rejects_invalid_pagination(client, world):
+    headers = auth(world["borrower"])
+
+    assert (
+        client.get(
+            "/api/v1/exchanges?limit=0",
+            headers=headers,
+        ).status_code
+        == 422
+    )
+
+    assert (
+        client.get(
+            "/api/v1/exchanges?limit=101",
+            headers=headers,
+        ).status_code
+        == 422
+    )
+
+    assert (
+        client.get(
+            "/api/v1/exchanges?offset=-1",
+            headers=headers,
+        ).status_code
+        == 422
+    )
+
+
+def test_exchange_history_requires_authentication(client):
+    response = client.get("/api/v1/exchanges")
+    assert response.status_code in (401, 403)
