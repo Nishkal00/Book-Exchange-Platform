@@ -1,11 +1,10 @@
-"""Requests router: create, cancel, and get ranked matches (SRS F-020, F-021, F-022, SAD 4.3.1)."""
-
-from __future__ import annotations
+"""Requests router: create, cancel, and get ranked matches (F-020, F-021, F-022)."""
 
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -18,22 +17,50 @@ router = APIRouter(prefix="/api/v1/requests", tags=["requests"])
 
 
 class CreateBorrowRequestPayload(BaseModel):
-    """Payload schema for creating a borrow request (F-020)."""
+    """Payload for creating a borrow request (F-020)."""
 
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    isbn: str | None = None
-    query: str | None = None
+    isbn: str | None = Field(default=None, min_length=10, max_length=17)
+    query: str | None = Field(default=None, min_length=1, max_length=200)
+    title_query: str | None = Field(default=None, min_length=1, max_length=200)
     location: str = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_criterion(self):
+        if self.query is not None and self.title_query is not None:
+            raise ValueError("Provide only one of query or title_query")
+
+        if self.title_query is not None:
+            self.query = self.title_query
+
+        if bool(self.isbn) == bool(self.query):
+            raise ValueError("Provide exactly one of isbn or title_query")
+
+        if self.isbn is not None:
+            normalized = self.isbn.replace("-", "").replace(" ", "")
+            if len(normalized) not in (10, 13) or not normalized.isdigit():
+                raise ValueError("ISBN must contain 10 or 13 digits")
+            self.isbn = normalized
+
+        if self.query is not None:
+            self.query = self.query.strip()
+            if not self.query:
+                raise ValueError("Title query cannot be empty")
+
+        return self
 
 
 class BorrowRequestOut(BaseModel):
-    """Public schema for a borrow request (SAD 4.3.1)."""
+    """Public schema for a borrow request."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     borrower_id: int
     isbn: str | None
     query: str | None
+    title_query: str | None = None
     location: str
     status: str
     created_at: datetime
@@ -50,7 +77,7 @@ class BorrowRequestOut(BaseModel):
 
 
 class MatchSuggestionOut(BaseModel):
-    """Ranked match suggestion schema for borrower (SAD 4.3.1 / F-022)."""
+    """Ranked match suggestion schema for a borrower."""
 
     match_id: int
     listing: ListingOut
@@ -64,12 +91,13 @@ class MatchSuggestionOut(BaseModel):
 
 
 def serialize_request(req: BorrowRequest) -> BorrowRequestOut:
-    """Helper to convert BorrowRequest to BorrowRequestOut."""
+    """Convert a BorrowRequest ORM instance to its response schema."""
     return BorrowRequestOut(
         id=req.id,
         borrower_id=req.borrower_id,
         isbn=req.isbn,
         query=req.query,
+        title_query=req.query,
         location=req.location,
         status=req.status,
         created_at=req.created_at,
@@ -82,46 +110,31 @@ def create_borrow_request(
     current_user: User = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> BorrowRequestOut:
-    """Create an OPEN borrow request specifying ISBN or a nonempty query and location (F-020).
+    """Create an OPEN request using an ISBN or query and a location."""
 
-    Rejects duplicate active requests by the same student with identical criteria with 409.
-    """
-    clean_isbn = payload.isbn.replace("-", "").strip() if payload.isbn else None
+    clean_isbn = payload.isbn
     clean_query = payload.query.strip() if payload.query else None
-
-    if not clean_isbn and not clean_query:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Either ISBN or title/author query must be provided",
-        )
-
-    if clean_isbn:
-        if not (len(clean_isbn) in (10, 13) and clean_isbn.isdigit()):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="ISBN must be 10 or 13 digits after hyphen removal",
-            )
-
     clean_location = payload.location.strip()
+
     if not clean_location:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Location cannot be empty",
         )
 
-    # Check for duplicate active requests by the same student and criteria (F-020)
-    existing_active = (
-        db.query(BorrowRequest)
-        .filter(
-            BorrowRequest.borrower_id == current_user.id,
-            BorrowRequest.status.in_(["OPEN", "MATCHED"]),
-            BorrowRequest.isbn == clean_isbn,
-            BorrowRequest.query == clean_query,
-            BorrowRequest.location == clean_location,
-        )
-        .first()
-    )
-    if existing_active:
+    criteria = [
+        BorrowRequest.borrower_id == current_user.id,
+        BorrowRequest.status.in_(["OPEN", "MATCHED"]),
+    ]
+
+    if clean_isbn is not None:
+        criteria.append(BorrowRequest.isbn == clean_isbn)
+    else:
+        criteria.append(BorrowRequest.query == clean_query)
+
+    existing = db.scalar(select(BorrowRequest).where(*criteria))
+
+    if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="DUPLICATE_ACTIVE_REQUEST",
@@ -134,6 +147,7 @@ def create_borrow_request(
         location=clean_location,
         status="OPEN",
     )
+
     db.add(new_request)
     db.commit()
     db.refresh(new_request)
@@ -147,13 +161,10 @@ def cancel_borrow_request(
     current_user: User = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> BorrowRequestOut:
-    """Allow only the borrower to cancel an OPEN or MATCHED request (F-021).
+    """Cancel an owned OPEN or MATCHED request unless an active exchange exists."""
 
-    Releases uncommitted reservations and invalidates linked pending matches atomically.
-    An active exchange returns 409 Conflict.
-    Repeat cancel on an already cancelled request is idempotent (200).
-    """
     req = db.query(BorrowRequest).filter(BorrowRequest.id == request_id).first()
+
     if not req:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -169,7 +180,12 @@ def cancel_borrow_request(
     if req.status == "CANCELLED":
         return serialize_request(req)
 
-    # Check if involved in an active exchange
+    if req.status not in ("OPEN", "MATCHED"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Request cannot be cancelled in its current status",
+        )
+
     active_exchange = (
         db.query(Exchange)
         .filter(
@@ -178,6 +194,7 @@ def cancel_borrow_request(
         )
         .first()
     )
+
     if active_exchange:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -186,13 +203,13 @@ def cancel_borrow_request(
 
     req.status = "CANCELLED"
 
-    # Invalidate linked proposed matches
-    for m in req.matches:
-        if m.status == "PROPOSED":
-            m.status = "EXPIRED"
+    for match in req.matches:
+        if match.status == "PROPOSED":
+            match.status = "EXPIRED"
 
     db.commit()
     db.refresh(req)
+
     return serialize_request(req)
 
 
@@ -202,13 +219,10 @@ def get_request_matches(
     current_user: User = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> list[MatchSuggestionOut]:
-    """Return top 5 deterministic ranked suggestions for borrower (F-022, TC-MAT-01, TC-MAT-03).
+    """Return ranked suggestions for the authenticated borrower."""
 
-    Excludes own, deleted, inactive, and active-exchange offers.
-    Recomputed on each call to reflect latest listing and match statuses.
-    Omits partner contact details (SR-007).
-    """
     req = db.query(BorrowRequest).filter(BorrowRequest.id == request_id).first()
+
     if not req:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -221,16 +235,14 @@ def get_request_matches(
             detail="Only the borrower can view match suggestions",
         )
 
-    # Recompute matches dynamically
     matches = recompute_matches_for_request(db, req)
 
-    suggestions = [
+    return [
         MatchSuggestionOut(
-            match_id=m.id,
-            listing=serialize_listing(m.listing),
-            score=float(m.score),
-            state=m.status,
+            match_id=match.id,
+            listing=serialize_listing(match.listing),
+            score=float(match.score),
+            state=match.status,
         )
-        for m in matches
+        for match in matches
     ]
-    return suggestions

@@ -1,4 +1,4 @@
-"""Data models (SAD section 3.6): users, books, listings, borrow_requests, matches, exchanges."""
+"""Data models for users, books, listings, borrow requests, matches, and exchanges."""
 
 from datetime import datetime
 
@@ -59,7 +59,7 @@ class Book(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    isbn: Mapped[str] = mapped_column(String(13), unique=True)  # normalised: no hyphens
+    isbn: Mapped[str] = mapped_column(String(13), unique=True)
     title: Mapped[str] = mapped_column(String(200))
     author: Mapped[str] = mapped_column(String(200))
 
