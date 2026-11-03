@@ -383,7 +383,18 @@ function App() {
   // Logout
   // --------------------------------------------------
 
-  function handleLogout() {
+  async function handleLogout() {
+    // Revoke the session server-side (BEP-13 / F-003) before clearing local
+    // state. If the call fails (offline, token already invalid) we still sign
+    // the user out locally.
+    try {
+      if (localStorage.getItem("bep_token")) {
+        await api.post("/api/v1/auth/logout", null, authConfig());
+      }
+    } catch {
+      // ignore: local sign-out must always succeed
+    }
+
     localStorage.removeItem("bep_token");
     localStorage.removeItem("bep_user");
 
