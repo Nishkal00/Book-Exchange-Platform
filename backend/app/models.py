@@ -206,6 +206,23 @@ class Exchange(Base):
     listing: Mapped[Listing] = relationship("Listing", back_populates="exchanges")
 
 
+class ExchangeEvent(Base):
+    """Append-only history of exchange state transitions (F-025: retain history)."""
+
+    __tablename__ = "exchange_events"
+    __table_args__ = (Index("ix_exchange_events_exchange_created", "exchange_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    exchange_id: Mapped[int] = mapped_column(
+        ForeignKey("exchanges.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    from_state: Mapped[str | None] = mapped_column(String(20))
+    to_state: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Notification(Base):
     __tablename__ = "notifications"
 
