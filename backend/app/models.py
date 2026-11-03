@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    UniqueConstraint,
     func,
     text,
 )
@@ -45,6 +46,7 @@ class User(Base):
 
     listings: Mapped[list["Listing"]] = relationship(back_populates="owner")
     borrow_requests: Mapped[list["BorrowRequest"]] = relationship(back_populates="borrower")
+    notifications: Mapped[list["Notification"]] = relationship(back_populates="user")
 
 
 class Book(Base):
@@ -202,3 +204,61 @@ class Exchange(Base):
     match: Mapped[Match] = relationship("Match", back_populates="exchange")
     request: Mapped[BorrowRequest] = relationship("BorrowRequest", back_populates="exchanges")
     listing: Mapped[Listing] = relationship("Listing", back_populates="exchanges")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "event_key",
+            name="uq_notifications_user_event",
+        ),
+        CheckConstraint(
+            "event_type IN ('MATCH_FOUND', 'PARTNER_DECISION', 'EXCHANGE_UPDATED')",
+            name="ck_notifications_event_type",
+        ),
+        Index(
+            "ix_notifications_user_created",
+            "user_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    event_key: Mapped[str] = mapped_column(
+        String(150),
+        nullable=False,
+    )
+
+    event_type: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+    )
+
+    message: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+    )
+
+    is_read: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    user: Mapped["User"] = relationship(back_populates="notifications")

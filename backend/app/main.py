@@ -5,6 +5,7 @@ from app.config import get_settings
 from app.routers.auth import router as auth_router
 from app.routers.listings import router as listings_router
 from app.routers.matches import router as matches_router
+from app.routers.notifications import router as notifications_router
 from app.routers.requests import router as requests_router
 
 app = FastAPI(title="Book Exchange Platform API", version="0.1.0")
@@ -12,6 +13,7 @@ app.include_router(auth_router)
 app.include_router(listings_router)
 app.include_router(requests_router)
 app.include_router(matches_router)
+app.include_router(notifications_router)
 
 app.add_middleware(
     CORSMiddleware,
