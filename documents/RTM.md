@@ -48,6 +48,7 @@ Partially executed requirements remain N until all applicable tests are complete
 | F-012 | TC-LST-05, TC-SEC-05 | N | Availability changed from AVAILABLE to UNAVAILABLE and persisted after refresh. Security test pending. |
 | F-013 | TC-LST-06, TC-LST-07, TC-SEC-05 | A | Soft delete returns 204. Active exchange delete guard verified with real database exchange (409 ACTIVE_EXCHANGE) in TC-LST-07 and test_matching.py. |
 | F-022 | TC-MAT-01, TC-MAT-02, TC-MAT-03 | A | Top-five ranking by score (ISBN/title relevance, location, condition), exclusions, locking on simultaneous mutual acceptances (409), decline/status change recomputation, and deterministic ties verified in automated suite (test_matching.py). |
+| F-024 | TC-MAT-04, TC-SEC-07 | A | Mutual acceptance atomically creates active exchange, reserves listing, and fulfills request. Single accept holds exchange. Stale/conflicting matches return 409. Repeat decisions are idempotent (test_match_decision.py). |
 | NF-001 | TC-PERF-01 | N | Performance test not executed in this session. |
 | NF-002 | TC-OPS-01 | N | Operations test not fully verified in this session. |
 | NF-003 | TC-UX-01 | N | 360px layout and no horizontal overflow verified. Search empty state verified. Click-count, keyboard accessibility and validation-error checks remain pending. |
@@ -59,7 +60,7 @@ Partially executed requirements remain N until all applicable tests are complete
 | SR-004 | TC-SEC-04 | N | Not verified in this session. |
 | SR-005 | TC-SEC-05, TC-PRF-02 | N | Not fully verified. |
 | SR-006 | TC-SEC-06 | N | Not verified in this session. |
-| SR-007 | TC-SEC-07 | N | Not verified in this session. |
+| SR-007 | TC-SEC-07 | A | Pre-mutual acceptance, public listings, match proposals, and cancelled exchanges hide contact info. Mutual acceptance discloses partner contact only to active participants. Cancellation revokes contact access (403 in test_match_decision.py). |
 
 ## 4. Deployment and CI Evidence
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -275,6 +276,7 @@ def handle_match_decision(
         .options(
             joinedload(Match.request),
             joinedload(Match.listing),
+            joinedload(Match.exchange),
         )
         .filter(Match.id == match_id)
         .first()
@@ -302,6 +304,14 @@ def handle_match_decision(
                 detail="Cannot decline accepted or expired match",
             )
 
+        if match.status == "DECLINED":
+            return {
+                "status": "DECLINED",
+                "borrowerAccepted": match.borrower_accepted,
+                "lenderAccepted": match.lender_accepted,
+                "exchangeId": None,
+            }
+
         match.status = "DECLINED"
 
         other_user_id = match.listing.owner_id if is_borrower else match.request.borrower_id
@@ -327,11 +337,32 @@ def handle_match_decision(
         }
 
     # 2. Accept decision
-    if match.status in ("DECLINED", "EXPIRED"):
+    is_expired_by_time = False
+    if match.expires_at is not None:
+        exp_at = (
+            match.expires_at
+            if match.expires_at.tzinfo is not None
+            else match.expires_at.replace(tzinfo=UTC)
+        )
+        is_expired_by_time = exp_at < datetime.now(UTC)
+
+    if match.status in ("DECLINED", "EXPIRED") or is_expired_by_time:
+        if match.status not in ("DECLINED", "EXPIRED"):
+            match.status = "EXPIRED"
+            db.commit()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="STALE_MATCH",
         )
+
+    # Check if match was already mutually accepted (repeat decision is safe)
+    if match.status == "ACCEPTED":
+        return {
+            "status": "ACCEPTED",
+            "borrowerAccepted": match.borrower_accepted,
+            "lenderAccepted": match.lender_accepted,
+            "exchangeId": match.exchange.id if match.exchange else None,
+        }
 
     # Check if participant already accepted (idempotent / repeat decision is safe)
     if is_borrower and match.borrower_accepted and not match.lender_accepted:
