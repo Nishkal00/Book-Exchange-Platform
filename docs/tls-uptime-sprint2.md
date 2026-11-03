@@ -33,7 +33,7 @@ Limitation: browsers may upgrade the URL themselves, so this check does not prov
 
 ### 1.3 CORS is restricted to the configured frontend
 
-- The API only allows origins listed in the `CORS_ORIGINS` setting (`backend/app/main.py`, `CORSMiddleware`). It is set to the frontend URL in the Render dashboard, not hard-coded.
+- The API only allows origins listed in the `CORS_ORIGINS` setting (`backend/app/main.py`, `CORSMiddleware`). It is configured per environment (Render dashboard), not hard-coded.
 - From `https://bep-frontend.onrender.com`, a browser request to `https://bep-backend.onrender.com/health` succeeded (HTTP 200).
 - From a different origin (the team's Jira page), the same request was blocked by the browser (CORS failure).
 
@@ -53,7 +53,7 @@ Limitation: browsers may upgrade the URL themselves, so this check does not prov
 ## 2. NF-002 / TC-OPS-01: Uptime, 2 to 7 Nov 2026
 
 **Method**
-- Tool: UptimeRobot HTTP monitor on `https://bep-backend.onrender.com/health`, interval 5 minutes.
+- Tool: UptimeRobot HTTP monitor on `https://bep-backend.onrender.com/health`, interval 5 minutes (confirm in the monitor settings before 7 Nov).
 - Window: 2 Nov 2026 to 7 Nov 2026.
 - Count a probe as failed if it times out, returns non-200, or hits a cold start after sleep. The free Render tier sleeps after 15 minutes without traffic; the 5-minute monitor keeps the service awake, but any sleep or outage still counts as failure.
 - Disclose planned maintenance and gaps in measurement. This short-window target is not a monthly SLA.
