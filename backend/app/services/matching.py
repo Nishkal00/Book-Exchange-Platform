@@ -1,5 +1,3 @@
-"""Matching engine with scoring, locking, and re-match (SAD 3.5.1 / F-022)."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -9,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import BorrowRequest, Exchange, Listing, Match, User
+from app.services.notifications import create_notification
 
 
 def trigrams(s: str) -> set[str]:
@@ -219,6 +218,25 @@ def recompute_matches_for_request(db: Session, request: BorrowRequest) -> list[M
             )
             db.add(match)
             db.flush()
+
+            # Notify the borrower about the new match.
+            create_notification(
+                db,
+                user_id=request.borrower_id,
+                event_key=f"match:{match.id}:found",
+                event_type="MATCH_FOUND",
+                message=f"A new book match was found for your request: {lst.book.title}.",
+            )
+
+            # Notify the listing owner about the new match.
+            create_notification(
+                db,
+                user_id=lst.owner_id,
+                event_key=f"match:{match.id}:found",
+                event_type="MATCH_FOUND",
+                message=f"Your listing '{lst.book.title}' has a new potential borrower.",
+            )
+
         result_matches.append(match)
 
     if result_matches:
@@ -283,11 +301,24 @@ def handle_match_decision(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Cannot decline accepted or expired match",
             )
+
         match.status = "DECLINED"
+
+        other_user_id = match.listing.owner_id if is_borrower else match.request.borrower_id
+
+        create_notification(
+            db,
+            user_id=other_user_id,
+            event_key=f"match:{match.id}:decision:{current_user_id}:decline",
+            event_type="PARTNER_DECISION",
+            message="Your match partner declined the proposed exchange.",
+        )
+
         db.commit()
 
-        # Recompute matches for the request so another listing can be suggested
+        # Recompute matches for the request so another listing can be suggested.
         recompute_matches_for_request(db, match.request)
+
         return {
             "status": "DECLINED",
             "borrowerAccepted": match.borrower_accepted,
@@ -322,6 +353,16 @@ def handle_match_decision(
         match.borrower_accepted = True
     if is_lender:
         match.lender_accepted = True
+
+    other_user_id = match.listing.owner_id if is_borrower else match.request.borrower_id
+
+    create_notification(
+        db,
+        user_id=other_user_id,
+        event_key=f"match:{match.id}:decision:{current_user_id}:accept",
+        event_type="PARTNER_DECISION",
+        message="Your match partner accepted the proposed exchange.",
+    )
 
     # If only one participant accepted so far
     if not (match.borrower_accepted and match.lender_accepted):
@@ -386,6 +427,23 @@ def handle_match_decision(
     match.status = "ACCEPTED"
 
     try:
+        # Assign the exchange ID before creating its notifications.
+        db.flush()
+
+        participants = [
+            request.borrower_id,
+            listing.owner_id,
+        ]
+
+        for participant_id in participants:
+            create_notification(
+                db,
+                user_id=participant_id,
+                event_key=f"exchange:{exchange.id}:state:ACCEPTED",
+                event_type="EXCHANGE_UPDATED",
+                message=f"Your book exchange for '{listing.book.title}' has been accepted.",
+            )
+
         db.commit()
         db.refresh(exchange)
     except IntegrityError:
