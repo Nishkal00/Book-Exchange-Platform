@@ -161,9 +161,9 @@ def cancel_borrow_request(
     current_user: User = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> BorrowRequestOut:
-    """Cancel an owned OPEN or MATCHED request unless an active exchange exists."""
+    """Cancel an owned OPEN or MATCHED request atomically."""
 
-    req = db.query(BorrowRequest).filter(BorrowRequest.id == request_id).first()
+    req = db.query(BorrowRequest).filter(BorrowRequest.id == request_id).with_for_update().first()
 
     if not req:
         raise HTTPException(
@@ -201,14 +201,18 @@ def cancel_borrow_request(
             detail="ACTIVE_EXCHANGE",
         )
 
-    req.status = "CANCELLED"
+    try:
+        req.status = "CANCELLED"
 
-    for match in req.matches:
-        if match.status == "PROPOSED":
-            match.status = "EXPIRED"
+        for match in req.matches:
+            if match.status == "PROPOSED":
+                match.status = "EXPIRED"
 
-    db.commit()
-    db.refresh(req)
+        db.commit()
+        db.refresh(req)
+    except Exception:
+        db.rollback()
+        raise
 
     return serialize_request(req)
 
