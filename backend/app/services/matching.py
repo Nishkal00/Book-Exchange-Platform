@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import BorrowRequest, Exchange, Listing, Match, User
+from app.models import Book, BorrowRequest, Exchange, Listing, Match, User
 from app.services.notifications import create_notification
 
 
@@ -128,10 +130,13 @@ def get_candidate_listings(
     }
 
     # 3. Base query for eligible listings
+    req_isbn_norm = request.isbn.replace("-", "").strip() if request.isbn else None
+
     query = (
         db.query(Listing)
         .options(joinedload(Listing.book), joinedload(Listing.owner))
         .join(User, Listing.owner_id == User.id)
+        .join(Book, Listing.book_id == Book.id)
         .filter(
             Listing.deleted_at.is_(None),
             Listing.status == "AVAILABLE",
@@ -139,6 +144,20 @@ def get_candidate_listings(
             User.active.is_(True),
         )
     )
+
+    if req_isbn_norm:
+        query = query.filter(Book.isbn == req_isbn_norm)
+    elif request.query:
+        stopwords = {"and", "the", "for", "with", "from", "vol", "volume"}
+        raw_tokens = re.findall(r"[a-zA-Z0-9]{3,}", request.query)
+        words = [w for w in raw_tokens if w.lower() not in stopwords]
+        if words:
+            words.sort(key=len, reverse=True)
+            sig_words = words[:2]
+            conds = [Book.title.ilike(f"%{w}%") for w in sig_words]
+            if len(words) <= 2:
+                conds.extend([Book.author.ilike(f"%{w}%") for w in sig_words])
+            query = query.filter(or_(*conds))
 
     if active_exchange_listing_ids:
         query = query.filter(Listing.id.notin_(active_exchange_listing_ids))
