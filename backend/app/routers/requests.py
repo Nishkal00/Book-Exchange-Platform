@@ -104,6 +104,21 @@ def serialize_request(req: BorrowRequest) -> BorrowRequestOut:
     )
 
 
+@router.get("", response_model=list[BorrowRequestOut])
+def list_my_borrow_requests(
+    current_user: User = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> list[BorrowRequestOut]:
+    """List the authenticated user's own borrow requests, newest first (F-020, F-021)."""
+
+    requests_ = db.scalars(
+        select(BorrowRequest)
+        .where(BorrowRequest.borrower_id == current_user.id)
+        .order_by(BorrowRequest.created_at.desc(), BorrowRequest.id.desc())
+    ).all()
+    return [serialize_request(req) for req in requests_]
+
+
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=BorrowRequestOut)
 def create_borrow_request(
     payload: CreateBorrowRequestPayload,
