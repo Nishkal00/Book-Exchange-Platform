@@ -581,3 +581,74 @@ def cancel_exchange(
     db.commit()
 
     return _serialize(db, exchange)
+
+
+# ---------------------------------------------------------------------------
+# F-026: Confirm return
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{exchange_id}/return",
+    response_model=ExchangeOut,
+)
+def confirm_return(
+    exchange_id: int,
+    current_user: User = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> ExchangeOut:
+    """Record the caller's return confirmation (TC-EXC-02).
+
+    The exchange moves ON_LOAN -> RETURNED only once both the borrower and the lender have
+    confirmed, and the listing then becomes AVAILABLE again. Confirming twice is idempotent:
+    no extra event, notification or state change.
+    """
+
+    exchange = _load_exchange(db, exchange_id, current_user)
+    is_borrower = current_user.id == exchange.request.borrower_id
+
+    # A returned exchange stays as it is, whoever calls again.
+    if exchange.state == "RETURNED":
+        return _serialize(db, exchange)
+
+    _require_state(exchange, "ON_LOAN")
+
+    already_confirmed = (
+        exchange.borrower_return_confirmed if is_borrower else exchange.lender_return_confirmed
+    )
+    if already_confirmed:
+        return _serialize(db, exchange)
+
+    if is_borrower:
+        exchange.borrower_return_confirmed = True
+    else:
+        exchange.lender_return_confirmed = True
+
+    _record(db, exchange, current_user, "RETURN_CONFIRMED", exchange.state)
+
+    title = exchange.listing.book.title
+
+    if exchange.borrower_return_confirmed and exchange.lender_return_confirmed:
+        _record(db, exchange, current_user, "RETURNED", "RETURNED")
+        exchange.state = "RETURNED"
+        exchange.returned_at = datetime.now(UTC)
+        exchange.listing.status = "AVAILABLE"
+        _notify(
+            db,
+            exchange,
+            "RETURNED",
+            f"'{title}' has been returned. The exchange is complete.",
+        )
+    else:
+        partner_id = exchange.listing.owner_id if is_borrower else exchange.request.borrower_id
+        create_notification(
+            db,
+            user_id=partner_id,
+            event_key=f"exchange:{exchange.id}:return:{current_user.id}",
+            event_type="EXCHANGE_UPDATED",
+            message=f"Your partner confirmed the return of '{title}'. Please confirm it too.",
+        )
+
+    db.commit()
+
+    return _serialize(db, exchange)
