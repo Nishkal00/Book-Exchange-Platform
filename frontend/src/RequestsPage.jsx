@@ -43,7 +43,7 @@ function matchStatusText(match) {
   return "Waiting for decisions";
 }
 
-function RequestsPage({ user, prefill, onPrefillUsed }) {
+function RequestsPage({ user, prefill, onPrefillUsed, onNavigateToExchange }) {
   const [mode, setMode] = useState("isbn");
   const [isbn, setIsbn] = useState("");
   const [title, setTitle] = useState("");
@@ -278,6 +278,17 @@ function RequestsPage({ user, prefill, onPrefillUsed }) {
                           </button>
                           <button className="danger-btn" type="button" disabled={busyId === `m${match.match_id}`} onClick={() => handleDecision(match, "decline")}>
                             Decline
+                          </button>
+                        </div>
+                      )}
+                      {match.status === "ACCEPTED" && match.exchange_id && (
+                        <div className="listing-card-actions">
+                          <button
+                            className="primary-btn"
+                            type="button"
+                            onClick={() => onNavigateToExchange?.(match.exchange_id)}
+                          >
+                            Open Exchange #{match.exchange_id} →
                           </button>
                         </div>
                       )}

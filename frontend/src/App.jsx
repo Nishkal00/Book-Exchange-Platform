@@ -1,6 +1,8 @@
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "./api.js";
+import ExchangesPage from "./ExchangesPage.jsx";
+import NotificationsPage from "./NotificationsPage.jsx";
 import RequestsPage from "./RequestsPage.jsx";
 import "./styles.css";
 
@@ -15,6 +17,27 @@ const EMPTY_FILTERS = {
 function App() {
   const [page, setPage] = useState("home");
   const [requestPrefill, setRequestPrefill] = useState(null);
+  const [selectedExchangeId, setSelectedExchangeId] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnreadCount = useCallback(async () => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+    try {
+      const res = await api.get("/api/v1/notifications?limit=1", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("bep_token")}` },
+      });
+      setUnreadCount(res.data.unread_count || 0);
+    } catch {
+      // Ignore network errors gracefully
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchUnreadCount();
+  }, [fetchUnreadCount, page]);
   const [apiStatus, setApiStatus] = useState("Checking...");
   const [registerSchema, setRegisterSchema] = useState(null);
 
@@ -250,12 +273,23 @@ function App() {
   // Navigation
   // --------------------------------------------------
 
-  function navigate(nextPage) {
-    if ((nextPage === "mine" || nextPage === "profile" || nextPage === "requests") && !user) {
+  function navigate(nextPage, extra = null) {
+    if (
+      (nextPage === "mine" ||
+        nextPage === "profile" ||
+        nextPage === "requests" ||
+        nextPage === "exchanges" ||
+        nextPage === "notifications") &&
+      !user
+    ) {
       setPage("login");
-      setMessage("Please sign in to view your listings.");
+      setMessage("Please sign in to access this page.");
       setMessageType("error");
       return;
+    }
+
+    if (nextPage === "exchanges" && extra) {
+      setSelectedExchangeId(extra);
     }
 
     setPage(nextPage);
@@ -1044,6 +1078,23 @@ function App() {
           )}
           {user && (
             <button
+              className={page === "exchanges" ? "active" : ""}
+              onClick={() => navigate("exchanges")}
+            >
+              Exchanges
+            </button>
+          )}
+          {user && (
+            <button
+              className={`nav-notification-btn ${page === "notifications" ? "active" : ""}`}
+              onClick={() => navigate("notifications")}
+            >
+              Notifications
+              {unreadCount > 0 && <span className="nav-badge">{unreadCount}</span>}
+            </button>
+          )}
+          {user && (
+            <button
               className={page === "profile" ? "active" : ""}
               onClick={() => navigate("profile")}
             >
@@ -1177,6 +1228,24 @@ function App() {
             user={user}
             prefill={requestPrefill}
             onPrefillUsed={() => setRequestPrefill(null)}
+            onNavigateToExchange={(id) => navigate("exchanges", id)}
+          />
+        )}
+
+        {page === "exchanges" && user && (
+          <ExchangesPage
+            user={user}
+            initialExchangeId={selectedExchangeId}
+            onClearInitialExchange={() => setSelectedExchangeId(null)}
+            onNavigate={navigate}
+          />
+        )}
+
+        {page === "notifications" && user && (
+          <NotificationsPage
+            user={user}
+            onNavigate={navigate}
+            onNotificationRead={fetchUnreadCount}
           />
         )}
 
