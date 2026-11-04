@@ -326,6 +326,19 @@ def get_current_user(
     return user
 
 
+def get_current_admin(
+    current_user: User = Depends(get_current_user),  # noqa: B008
+) -> User:
+    """Require the authenticated user to have the admin role (F-040)."""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
+        )
+
+    return current_user
+
+
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
     current_user: User = Depends(get_current_user),  # noqa: B008
