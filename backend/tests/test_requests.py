@@ -125,3 +125,22 @@ def test_different_students_can_request_same_isbn(client, db):
 
     assert first.status_code == 201
     assert second.status_code == 201
+
+
+def test_list_my_requests_returns_only_own_newest_first(client, db):
+    me = create_test_user(db, email="me@example.edu")
+    other = create_test_user(db, email="other@example.edu")
+    for user, query in ((me, "Algorithms"), (other, "Compilers"), (me, "Databases")):
+        client.post(
+            "/api/v1/requests",
+            json={"title_query": query, "location": "Campus"},
+            headers={"Authorization": f"Bearer {create_auth_token(user)}"},
+        )
+
+    response = client.get(
+        "/api/v1/requests", headers={"Authorization": f"Bearer {create_auth_token(me)}"}
+    )
+
+    assert response.status_code == 200
+    assert [r["query"] for r in response.json()] == ["Databases", "Algorithms"]
+    assert client.get("/api/v1/requests").status_code in (401, 403)

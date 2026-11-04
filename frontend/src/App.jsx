@@ -1,6 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
+import RequestsPage from "./RequestsPage.jsx";
 import "./styles.css";
 
 const PAGE_SIZE = 20;
@@ -13,6 +14,7 @@ const EMPTY_FILTERS = {
 
 function App() {
   const [page, setPage] = useState("home");
+  const [requestPrefill, setRequestPrefill] = useState(null);
   const [apiStatus, setApiStatus] = useState("Checking...");
   const [registerSchema, setRegisterSchema] = useState(null);
 
@@ -249,7 +251,7 @@ function App() {
   // --------------------------------------------------
 
   function navigate(nextPage) {
-    if ((nextPage === "mine" || nextPage === "profile") && !user) {
+    if ((nextPage === "mine" || nextPage === "profile" || nextPage === "requests") && !user) {
       setPage("login");
       setMessage("Please sign in to view your listings.");
       setMessageType("error");
@@ -917,6 +919,25 @@ function App() {
                     </p>
                   </div>
 
+                  {!isMine && user && book.status === "AVAILABLE" && book.ownerId !== user.id && (
+                    <div className="listing-card-actions">
+                      <button
+                        className="primary-btn"
+                        type="button"
+                        onClick={() => {
+                          setRequestPrefill({
+                            isbn: book.isbn,
+                            title: book.title,
+                            location: book.location,
+                          });
+                          navigate("requests");
+                        }}
+                      >
+                        Request this book
+                      </button>
+                    </div>
+                  )}
+
                   {isMine && (
                     <div className="listing-card-actions">
                       <button className="secondary-btn" type="button" onClick={() => openEditListing(book)}>
@@ -1011,6 +1032,14 @@ function App() {
               onClick={() => navigate("mine")}
             >
               My Listings
+            </button>
+          )}
+          {user && (
+            <button
+              className={page === "requests" ? "active" : ""}
+              onClick={() => navigate("requests")}
+            >
+              Requests
             </button>
           )}
           {user && (
@@ -1142,6 +1171,14 @@ function App() {
           renderListings()}
 
         {/* PROFILE */}
+
+        {page === "requests" && user && (
+          <RequestsPage
+            user={user}
+            prefill={requestPrefill}
+            onPrefillUsed={() => setRequestPrefill(null)}
+          />
+        )}
 
         {page === "profile" && user && (
           <section className="browse-page profile-page">

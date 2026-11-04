@@ -1231,3 +1231,71 @@ h3 {
     width: 100%;
   }
 }
+
+/* BEP-39: requests and matches */
+.requests-page .request-mode {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.requests-block {
+  margin-top: 2rem;
+}
+
+.requests-block h2 {
+  margin-bottom: 0.75rem;
+}
+
+.requests-empty {
+  color: #5c6b60;
+}
+
+.request-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.request-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.25rem;
+  background: #fff;
+  border: 1px solid #e3e0d6;
+  border-radius: 12px;
+}
+
+.request-row > div:first-child {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.request-row span {
+  color: #5c6b60;
+  font-size: 0.9rem;
+}
+
+.request-row .match-state {
+  color: #2f5d3a;
+  font-weight: 600;
+}
+
+.requests-page .message {
+  margin: 1rem 0;
+}
+
+.request-row .listing-card-actions {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.request-row .listing-card-actions button {
+  white-space: nowrap;
+}

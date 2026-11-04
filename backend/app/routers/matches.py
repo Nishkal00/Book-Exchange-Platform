@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models import User
+from app.models import BorrowRequest, Listing, Match, User
 from app.routers.auth import get_current_user
 from app.services.matching import handle_match_decision
 
@@ -57,3 +58,76 @@ def submit_match_decision(
         lenderAccepted=result["lenderAccepted"],
         exchangeId=result["exchangeId"],
     )
+
+
+class MatchListItem(BaseModel):
+    """A match the current user takes part in, without any contact details (SR-007)."""
+
+    match_id: int
+    request_id: int
+    listing_id: int
+    role: str
+    status: str
+    score: float
+    title: str
+    author: str
+    isbn: str
+    location: str
+    my_decision: bool
+    partner_decision: bool
+    exchange_id: int | None = None
+
+
+@router.get("", response_model=list[MatchListItem])
+def list_my_matches(
+    current_user: User = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> list[MatchListItem]:
+    """List matches where the user is the borrower or the lender (F-022, F-024).
+
+    Expired matches are left out. No partner identity or contact details are returned;
+    those are disclosed only after mutual acceptance through the exchange (SR-007).
+    """
+    matches = (
+        db.execute(
+            select(Match)
+            .join(BorrowRequest, Match.request_id == BorrowRequest.id)
+            .join(Listing, Match.listing_id == Listing.id)
+            .options(
+                joinedload(Match.request),
+                joinedload(Match.listing).joinedload(Listing.book),
+                joinedload(Match.exchange),
+            )
+            .where(
+                (BorrowRequest.borrower_id == current_user.id)
+                | (Listing.owner_id == current_user.id),
+                Match.status != "EXPIRED",
+            )
+            .order_by(Match.created_at.desc(), Match.id.desc())
+        )
+        .scalars()
+        .unique()
+        .all()
+    )
+
+    items = []
+    for match in matches:
+        is_borrower = match.request.borrower_id == current_user.id
+        items.append(
+            MatchListItem(
+                match_id=match.id,
+                request_id=match.request_id,
+                listing_id=match.listing_id,
+                role="borrower" if is_borrower else "lender",
+                status=match.status,
+                score=float(match.score),
+                title=match.listing.book.title,
+                author=match.listing.book.author,
+                isbn=match.listing.book.isbn,
+                location=match.listing.location,
+                my_decision=match.borrower_accepted if is_borrower else match.lender_accepted,
+                partner_decision=match.lender_accepted if is_borrower else match.borrower_accepted,
+                exchange_id=match.exchange.id if match.exchange else None,
+            )
+        )
+    return items
