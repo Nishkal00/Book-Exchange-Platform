@@ -347,6 +347,7 @@ def test_exchange_history_requires_authentication(client):
     response = client.get("/api/v1/exchanges")
     assert response.status_code in (401, 403)
 
+
 def test_contact_visible_to_both_exchange_participants(client, world):
     url = f"/api/v1/exchanges/{world['exchange'].id}/contact"
 

@@ -662,4 +662,3 @@ def confirm_return(
     db.commit()
 
     return _serialize(db, exchange)
-
