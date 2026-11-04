@@ -53,6 +53,7 @@ Partially executed requirements remain N until all applicable tests are complete
 | NF-002 | TC-OPS-01 | N | Operations test not fully verified in this session. |
 | NF-003 | TC-UX-01 | N | 360px layout and no horizontal overflow verified. Search empty state verified. Click-count, keyboard accessibility and validation-error checks remain pending. |
 | NF-004 | TC-CI-01 | N | GitHub Actions workflow run #46 succeeded and deployment was triggered. Full negative-gate testing remains pending. |
+| NF-005 | TC-PERF-02 | A | Top-five candidate matching verified at steady-state p95=1.3594s (<=2.0s limit) under 10 concurrent virtual callers with 1,000 open requests and 10,000 listings. 0 fatal errors. Report: docs/perf-sprint2.md. Automated in tests/test_perf_seed.py. |
 | NF-006 | TC-PORT-01 | N | Portability test not executed in this session. |
 | SR-001 | TC-SEC-01 | N | Security test not fully executed. |
 | SR-002 | TC-SEC-02, TC-AUTH-05, TC-AUTH-06 | N | Security tests not fully executed. |
