@@ -40,7 +40,6 @@ def auth(user):
 def test_admin_can_deactivate_user(client, db, admin):
     target = create_test_user(db, email="target@example.edu")
 
-
     response = client.post(
         f"/api/v1/admin/users/{target.id}/deactivate",
         json={"reason": "Repeated abusive behaviour"},
@@ -78,7 +77,6 @@ def test_student_cannot_access_admin_endpoint(client, db):
 def test_deactivated_user_token_is_revoked(client, db, admin):
     target = create_test_user(db, email="revoked@example.edu")
 
-
     old_token = create_auth_token(target)
 
     response = client.post(
@@ -97,7 +95,6 @@ def test_deactivated_user_token_is_revoked(client, db, admin):
 
 def test_deactivation_requires_reason(client, db, admin):
     target = create_test_user(db, email="no-reason@example.edu")
-    
 
     response = client.post(
         f"/api/v1/admin/users/{target.id}/deactivate",
