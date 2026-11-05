@@ -1705,6 +1705,341 @@ h3 {
   border-color: #f7dedc;
 }
 
+/* On Loan & Return Confirmation (F-026 / TC-EXC-02) */
+.on-loan-block {
+  background: #fdfcf7;
+  border-color: #e5e0cf;
+}
+
+.on-loan-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.on-loan-meta {
+  font-size: 0.9rem !important;
+  line-height: 1.5;
+  color: var(--text) !important;
+}
+
+.return-confirmation-box {
+  margin-top: 0.75rem;
+  padding: 1.1rem;
+  background: #ffffff;
+  border: 1px solid #dcd9cc;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.return-box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.return-box-header h5 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--green-dark);
+}
+
+.f-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #eef3eb;
+  color: #2b573a;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+}
+
+.return-box-instruction {
+  margin: 0 !important;
+  font-size: 0.86rem !important;
+  color: #555 !important;
+  line-height: 1.45;
+}
+
+.return-confirmation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.participant-status-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #e0ddd3;
+  background: #fbfaf6;
+  transition: all 0.2s ease;
+}
+
+.participant-status-card.confirmed {
+  border-color: #9ec5a8;
+  background: #f2f9f4;
+}
+
+.participant-status-card.pending {
+  border-color: #eedcc0;
+  background: #fffdf8;
+}
+
+.status-avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.participant-status-card.confirmed .status-avatar-circle {
+  background: #2b7a4b;
+  color: #ffffff;
+}
+
+.participant-status-card.pending .status-avatar-circle {
+  background: #f0e2cd;
+  color: #8c6328;
+}
+
+.status-detail-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.status-role {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.status-badge-text {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.participant-status-card.confirmed .status-badge-text {
+  color: #2b7a4b;
+}
+
+.participant-status-card.pending .status-badge-text {
+  color: #9c6c2e;
+}
+
+.return-actions-row {
+  margin-top: 0.25rem;
+}
+
+.confirm-return-btn {
+  background: #235937;
+  color: #ffffff;
+  padding: 0.65rem 1.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.confirm-return-btn:hover:not(:disabled) {
+  background: #194328;
+}
+
+.confirmed-pending-partner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  background: #f2f8f4;
+  border: 1px solid #b8dac1;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  color: #245837;
+}
+
+.confirmed-check {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #245837;
+  line-height: 1.2;
+}
+
+.confirmed-pending-partner strong {
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
+.confirmed-pending-partner p {
+  margin: 0 !important;
+  color: #3b6b4c !important;
+  font-size: 0.82rem !important;
+}
+
+/* Returned State (Complete & Listing Available) */
+.returned-block {
+  background: #f5fbf7;
+  border-color: #cce7d5;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.returned-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.returned-badge-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #235937;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.returned-header h4 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #1f4f30;
+}
+
+.returned-timestamp {
+  font-size: 0.82rem;
+  color: #4a775a;
+}
+
+.listing-available-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: #ffffff;
+  border: 1px solid #b5d8be;
+  border-radius: 8px;
+  padding: 0.85rem 1.1rem;
+}
+
+.available-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.available-text strong {
+  display: block;
+  color: #1e5a33;
+  font-size: 0.95rem;
+  margin-bottom: 0.2rem;
+}
+
+.available-text p {
+  margin: 0 !important;
+  font-size: 0.85rem !important;
+  color: #3e634b !important;
+  line-height: 1.4;
+}
+
+/* Return Rating (F-031) */
+.return-rating-section {
+  background: #ffffff;
+  border: 1px solid #e1ded4;
+  border-radius: 8px;
+  padding: 0.9rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.rating-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rating-header h5 {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--green-dark);
+}
+
+.rating-form-group {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rating-form-group select {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid #d5d2c6;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  min-width: 180px;
+}
+
+.rate-btn {
+  padding: 0.45rem 1rem;
+  font-size: 0.88rem;
+}
+
+.rating-confirmed-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #916812;
+  font-weight: 600;
+  font-size: 0.9rem;
+  background: #fdf8ed;
+  border: 1px solid #f2e2be;
+  padding: 0.5rem 0.85rem;
+  border-radius: 6px;
+}
+
+.rating-confirmed-box .star-icon {
+  font-size: 1.1rem;
+}
+
+/* List tags */
+.listing-restored-tag {
+  background: #e4f4e8;
+  color: #1e5c33;
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+.return-half-tag {
+  background: #fdf5e7;
+  color: #9c6c22;
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
 /* Timeline */
 .timeline-list {
   list-style: none;

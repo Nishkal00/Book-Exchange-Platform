@@ -67,15 +67,33 @@ class ExchangeOut(BaseModel):
     borrower_id: int
     lender_id: int
     state: str
-    due_at: datetime | None
-    handover_confirmed_at: datetime | None
-    cancelled_at: datetime | None
-    events: list[ExchangeEventOut]
+    due_at: datetime | None = None
+    handover_confirmed_at: datetime | None = None
+    returned_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    borrower_return_confirmed: bool = False
+    lender_return_confirmed: bool = False
+    events: list[ExchangeEventOut] = []
 
     @computed_field
     @property
     def cancelledAt(self) -> datetime | None:
         return self.cancelled_at
+
+    @computed_field
+    @property
+    def returnedAt(self) -> datetime | None:
+        return self.returned_at
+
+    @computed_field
+    @property
+    def borrowerReturnConfirmed(self) -> bool:
+        return self.borrower_return_confirmed
+
+    @computed_field
+    @property
+    def lenderReturnConfirmed(self) -> bool:
+        return self.lender_return_confirmed
 
 
 class PartnerContactOut(BaseModel):
@@ -157,6 +175,8 @@ class ExchangeHistoryItem(ExchangeHistoryOut):
     handover_confirmed_at: datetime | None = None
     returned_at: datetime | None = None
     cancelled_at: datetime | None = None
+    borrower_return_confirmed: bool = False
+    lender_return_confirmed: bool = False
 
 
 class ExchangeHistoryResponse(BaseModel):
@@ -258,7 +278,10 @@ def _serialize(db: Session, exchange: Exchange) -> ExchangeOut:
         state=exchange.state,
         due_at=exchange.due_at,
         handover_confirmed_at=exchange.handover_confirmed_at,
+        returned_at=exchange.returned_at,
         cancelled_at=exchange.cancelled_at,
+        borrower_return_confirmed=bool(exchange.borrower_return_confirmed),
+        lender_return_confirmed=bool(exchange.lender_return_confirmed),
         events=[ExchangeEventOut.model_validate(event) for event in events],
     )
 
@@ -357,6 +380,8 @@ def get_my_exchanges(
                 handover_confirmed_at=exchange.handover_confirmed_at,
                 returned_at=exchange.returned_at,
                 cancelled_at=exchange.cancelled_at,
+                borrower_return_confirmed=bool(exchange.borrower_return_confirmed),
+                lender_return_confirmed=bool(exchange.lender_return_confirmed),
             )
         )
 

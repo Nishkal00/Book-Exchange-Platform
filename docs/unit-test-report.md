@@ -2,16 +2,16 @@
 
 | Item | Value |
 | :--- | :--- |
-| Generated | 05 Nov 2026 12:42 |
-| Commit | `653560e (+ uncommitted changes)` |
-| Python | 3.13.17 on Linux |
+| Generated | 05 Nov 2026 21:29 |
+| Commit | `a3f30f0 (+ uncommitted changes)` |
+| Python | 3.13.7 on Windows |
 | Command | `python scripts/generate_test_reports.py` (runs `pytest` in `backend/`) |
 
 ## Summary
 
 | Total | Passed | Failed | Skipped | Duration |
 | ---: | ---: | ---: | ---: | ---: |
-| 172 | 172 | 0 | 0 | 27.2 s |
+| 172 | 172 | 0 | 0 | 24.9 s |
 
 Database: in-memory SQLite for unit tests. PostgreSQL-only behaviour is exercised by the
 CI migration step against a real PostgreSQL service.
