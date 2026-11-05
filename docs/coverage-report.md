@@ -2,8 +2,8 @@
 
 | Item | Value |
 | :--- | :--- |
-| Generated | 04 Nov 2026 14:50 |
-| Commit | `77b5d7f (+ uncommitted changes)` |
+| Generated | 05 Nov 2026 12:42 |
+| Commit | `653560e (+ uncommitted changes)` |
 | Python | 3.13.17 on Linux |
 | Command | `python scripts/generate_test_reports.py` (runs `pytest` in `backend/`) |
 
@@ -11,9 +11,9 @@
 
 | Statements | Missed | Statement coverage | CI gate |
 | ---: | ---: | ---: | :--- |
-| 1218 | 76 | **93.8%** | >= 70% (met) |
+| 1342 | 72 | **94.6%** | >= 70% (met) |
 
-The CI gate (`--cov-fail-under=70`) uses the combined statement and branch figure, currently 91.5%.
+The CI gate (`--cov-fail-under=70`) uses the combined statement and branch figure, currently 92.6%.
 
 ## Coverage by file
 
@@ -22,13 +22,14 @@ The CI gate (`--cov-fail-under=70`) uses the combined statement and branch figur
 | `app/config.py` | 27 | 0 | 100% |
 | `app/database.py` | 15 | 0 | 100% |
 | `app/login_rate_limit.py` | 42 | 0 | 100% |
-| `app/main.py` | 20 | 0 | 100% |
-| `app/models.py` | 116 | 0 | 100% |
-| `app/routers/auth.py` | 170 | 18 | 89% |
-| `app/routers/exchanges.py` | 227 | 2 | 99% |
+| `app/main.py` | 22 | 0 | 100% |
+| `app/models.py` | 134 | 0 | 100% |
+| `app/routers/admin.py` | 38 | 3 | 92% |
+| `app/routers/auth.py` | 174 | 13 | 93% |
+| `app/routers/exchanges.py` | 273 | 9 | 97% |
 | `app/routers/listings.py` | 203 | 14 | 93% |
 | `app/routers/matches.py` | 44 | 0 | 100% |
 | `app/routers/notifications.py` | 37 | 0 | 100% |
 | `app/routers/requests.py` | 121 | 14 | 88% |
-| `app/services/matching.py` | 180 | 26 | 86% |
+| `app/services/matching.py` | 196 | 17 | 91% |
 | `app/services/notifications.py` | 16 | 2 | 88% |
