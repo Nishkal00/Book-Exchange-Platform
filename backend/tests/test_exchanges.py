@@ -346,3 +346,45 @@ def test_exchange_history_rejects_invalid_pagination(client, world):
 def test_exchange_history_requires_authentication(client):
     response = client.get("/api/v1/exchanges")
     assert response.status_code in (401, 403)
+
+
+def test_contact_visible_to_both_exchange_participants(client, world):
+    url = f"/api/v1/exchanges/{world['exchange'].id}/contact"
+
+    borrower_response = client.get(url, headers=auth(world["borrower"]))
+    lender_response = client.get(url, headers=auth(world["lender"]))
+
+    assert borrower_response.status_code == 200
+    assert borrower_response.json()["email"] == world["lender"].email
+
+    assert lender_response.status_code == 200
+    assert lender_response.json()["email"] == world["borrower"].email
+
+
+def test_outsider_cannot_view_partner_contact(client, world):
+    url = f"/api/v1/exchanges/{world['exchange'].id}/contact"
+
+    response = client.get(url, headers=auth(world["outsider"]))
+
+    assert response.status_code == 403
+
+
+def test_contact_hidden_until_mutual_acceptance(client, world, db):
+    match = db.query(Match).filter_by(id=world["exchange"].match_id).first()
+    match.lender_accepted = False
+    db.commit()
+
+    url = f"/api/v1/exchanges/{world['exchange'].id}/contact"
+    response = client.get(url, headers=auth(world["borrower"]))
+
+    assert response.status_code == 403
+
+
+def test_cancelled_exchange_revokes_contact_access(client, world, db):
+    world["exchange"].state = "CANCELLED"
+    db.commit()
+
+    url = f"/api/v1/exchanges/{world['exchange'].id}/contact"
+    response = client.get(url, headers=auth(world["borrower"]))
+
+    assert response.status_code == 403
