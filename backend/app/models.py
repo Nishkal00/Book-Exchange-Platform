@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
     func,
     text,
@@ -98,6 +99,27 @@ class Listing(Base):
     book: Mapped[Book] = relationship(back_populates="listings")
     matches: Mapped[list["Match"]] = relationship("Match", back_populates="listing")
     exchanges: Mapped[list["Exchange"]] = relationship("Exchange", back_populates="listing")
+
+
+class AuditEvent(Base):
+    """Append-only record of administrative moderation actions (F-040)."""
+
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        Index("ix_audit_events_actor_id", "actor_id"),
+        Index("ix_audit_events_target", "target"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    target: Mapped[str] = mapped_column(String(100), nullable=False)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
 
 
 class BorrowRequest(Base):

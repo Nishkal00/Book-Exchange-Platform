@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+from app.routers.admin import router as admin_router
 from app.routers.auth import router as auth_router
 from app.routers.exchanges import router as exchanges_router
 from app.routers.listings import router as listings_router
@@ -17,6 +18,7 @@ app.include_router(listings_router)
 app.include_router(matches_router)
 app.include_router(notifications_router)
 app.include_router(requests_router)
+app.include_router(admin_router)
 
 app.add_middleware(
     CORSMiddleware,
