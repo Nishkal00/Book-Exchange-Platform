@@ -440,6 +440,16 @@ def get_exchange_partner_contact(
             detail="Contact access revoked for cancelled exchange",
         )
 
+    if (
+        exchange.match.status != "ACCEPTED"
+        or not exchange.match.borrower_accepted
+        or not exchange.match.lender_accepted
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Contact access requires mutual match acceptance",
+        )
+
     partner = lender if is_borrower else borrower
 
     return PartnerContactOut(
