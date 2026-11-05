@@ -19,25 +19,6 @@ function App() {
   const [requestPrefill, setRequestPrefill] = useState(null);
   const [selectedExchangeId, setSelectedExchangeId] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
-
-  const fetchUnreadCount = useCallback(async () => {
-    if (!user) {
-      setUnreadCount(0);
-      return;
-    }
-    try {
-      const res = await api.get("/api/v1/notifications?limit=1", {
-        headers: { Authorization: `Bearer ${localStorage.getItem("bep_token")}` },
-      });
-      setUnreadCount(res.data.unread_count || 0);
-    } catch {
-      // Ignore network errors gracefully
-    }
-  }, [user]);
-
-  useEffect(() => {
-    fetchUnreadCount();
-  }, [fetchUnreadCount, page]);
   const [apiStatus, setApiStatus] = useState("Checking...");
   const [registerSchema, setRegisterSchema] = useState(null);
 
@@ -70,6 +51,25 @@ function App() {
       return null;
     }
   });
+
+  const fetchUnreadCount = useCallback(async () => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+    try {
+      const res = await api.get("/api/v1/notifications?limit=1", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("bep_token")}` },
+      });
+      setUnreadCount(res.data.unread_count || 0);
+    } catch {
+      // Ignore network errors gracefully
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchUnreadCount();
+  }, [fetchUnreadCount, page]);
 
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
