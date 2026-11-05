@@ -73,6 +73,8 @@ class ExchangeOut(BaseModel):
     cancelled_at: datetime | None = None
     borrower_return_confirmed: bool = False
     lender_return_confirmed: bool = False
+    book_title: str | None = None
+    book_author: str | None = None
     events: list[ExchangeEventOut] = []
 
     @computed_field
@@ -94,6 +96,16 @@ class ExchangeOut(BaseModel):
     @property
     def lenderReturnConfirmed(self) -> bool:
         return self.lender_return_confirmed
+
+    @computed_field
+    @property
+    def bookTitle(self) -> str | None:
+        return self.book_title
+
+    @computed_field
+    @property
+    def bookAuthor(self) -> str | None:
+        return self.book_author
 
 
 class PartnerContactOut(BaseModel):
@@ -269,6 +281,11 @@ def _serialize(db: Session, exchange: Exchange) -> ExchangeOut:
         .all()
     )
 
+    book_title = exchange.listing.book.title if exchange.listing and exchange.listing.book else None
+    book_author = (
+        exchange.listing.book.author if exchange.listing and exchange.listing.book else None
+    )
+
     return ExchangeOut(
         id=exchange.id,
         request_id=exchange.request_id,
@@ -282,6 +299,8 @@ def _serialize(db: Session, exchange: Exchange) -> ExchangeOut:
         cancelled_at=exchange.cancelled_at,
         borrower_return_confirmed=bool(exchange.borrower_return_confirmed),
         lender_return_confirmed=bool(exchange.lender_return_confirmed),
+        book_title=book_title,
+        book_author=book_author,
         events=[ExchangeEventOut.model_validate(event) for event in events],
     )
 

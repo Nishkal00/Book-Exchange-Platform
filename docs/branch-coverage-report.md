@@ -2,8 +2,8 @@
 
 | Item | Value |
 | :--- | :--- |
-| Generated | 05 Nov 2026 21:29 |
-| Commit | `a3f30f0 (+ uncommitted changes)` |
+| Generated | 05 Nov 2026 21:51 |
+| Commit | `ba0e726 (+ uncommitted changes)` |
 | Python | 3.13.7 on Windows |
 | Command | `python scripts/generate_test_reports.py` (runs `pytest` in `backend/`) |
 

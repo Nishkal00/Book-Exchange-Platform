@@ -134,21 +134,35 @@ function ExchangesPage({ user, initialExchangeId, onClearInitialExchange, onNavi
   const handleOpenExchange = useCallback((ex) => {
     setSelectedExchange(ex);
     loadDetail(ex.id);
-  }, [loadDetail]);
+    onNavigate?.("exchanges", ex.id);
+  }, [loadDetail, onNavigate]);
 
+  // Synchronize selected exchange with initialExchangeId prop (handles direct URL & browser back/forward)
   useEffect(() => {
-    if (initialExchangeId && exchanges.length > 0) {
-      const target = exchanges.find((e) => e.id === Number(initialExchangeId));
-      if (target) {
-        handleOpenExchange(target);
-      } else {
-        // Exchange might not be in the initial page; fetch detail directly
-        setSelectedExchange({ id: Number(initialExchangeId) });
-        loadDetail(Number(initialExchangeId));
+    if (initialExchangeId) {
+      const idNum = Number(initialExchangeId);
+      if (!selectedExchange || selectedExchange.id !== idNum) {
+        const target = exchanges.find((e) => e.id === idNum);
+        setSelectedExchange(target || { id: idNum });
+        loadDetail(idNum);
       }
-      onClearInitialExchange?.();
+    } else if (selectedExchange) {
+      // initialExchangeId is null (e.g. user navigated back to /exchanges)
+      setSelectedExchange(null);
+      setExchangeDetail(null);
+      setContact(null);
     }
-  }, [initialExchangeId, exchanges, handleOpenExchange, loadDetail, onClearInitialExchange]);
+  }, [initialExchangeId, loadDetail]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When exchanges list loads/updates, enrich selectedExchange with any missing metadata
+  useEffect(() => {
+    if (selectedExchange && exchanges.length > 0) {
+      const target = exchanges.find((e) => e.id === selectedExchange.id);
+      if (target) {
+        setSelectedExchange((prev) => (prev ? { ...target, ...prev } : target));
+      }
+    }
+  }, [exchanges]);
 
   function handleBackToList() {
     setSelectedExchange(null);
@@ -157,6 +171,7 @@ function ExchangesPage({ user, initialExchangeId, onClearInitialExchange, onNavi
     setNotice({ text: "", type: "" });
     setRatingSubmitted(false);
     setRatingInput(5);
+    onNavigate?.("exchanges", null);
     loadExchanges();
   }
 
@@ -400,16 +415,16 @@ function ExchangesPage({ user, initialExchangeId, onClearInitialExchange, onNavi
                 <div className="exchange-header-card">
                   <div className="exchange-header-info">
                     <span className="exchange-id-tag">Exchange #{exchangeDetail.id}</span>
-                    <h2>{selectedExchange.book_title || "Book Exchange"}</h2>
-                    {selectedExchange.book_author && (
-                      <p className="author-line">by {selectedExchange.book_author}</p>
+                    <h2>{selectedExchange?.book_title || exchangeDetail.book_title || "Book Exchange"}</h2>
+                    {(selectedExchange?.book_author || exchangeDetail.book_author) && (
+                      <p className="author-line">by {selectedExchange?.book_author || exchangeDetail.book_author}</p>
                     )}
                     <div className="exchange-badges">
                       <span className={`badge ${STATE_LABELS[exchangeDetail.state]?.className || ""}`}>
                         {STATE_LABELS[exchangeDetail.state]?.label || exchangeDetail.state}
                       </span>
                       <span className="badge role-badge">
-                        You are the {selectedExchange.role === "lender" ? "Lender" : "Borrower"}
+                        You are the {isLender ? "Lender" : isBorrower ? "Borrower" : "Participant"}
                       </span>
                     </div>
                   </div>
