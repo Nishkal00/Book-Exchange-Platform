@@ -1,9 +1,10 @@
-"""Seed script for performance and load testing (NF-001 / TC-PERF-01).
+"""Seed script for performance and load testing (NF-001 / TC-PERF-01, NF-005 / TC-PERF-02).
 
 Generates synthetic data matching the course test plan specification:
 - 20 synthetic users
 - ~2,000 books with unique ISBNs and realistic academic titles
 - 10,000 listings distributed across users and books
+- 1,000 open borrow requests (ISBN and title-query distributed)
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ import bcrypt  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.database import Base, SessionLocal, make_engine  # noqa: E402
-from app.models import Book, Listing, User  # noqa: E402
+from app.models import Book, BorrowRequest, Exchange, Listing, Match, User  # noqa: E402
 
 DISCIPLINES = [
     "Computer Science",
@@ -119,6 +120,7 @@ def seed_performance_data(
     num_users: int = 20,
     num_books: int = 2000,
     num_listings: int = 10000,
+    num_requests: int = 0,
     clean_first: bool = False,
 ) -> dict[str, int | float]:
     """Seed synthetic users, books, and listings into the database.
@@ -128,6 +130,9 @@ def seed_performance_data(
     start_time = time.perf_counter()
 
     if clean_first:
+        db.query(Exchange).delete()
+        db.query(Match).delete()
+        db.query(BorrowRequest).delete()
         db.query(Listing).delete()
         db.query(Book).delete()
         db.query(User).filter(User.email.like("perf_student_%@example.edu")).delete()
@@ -239,15 +244,55 @@ def seed_performance_data(
             db.flush()
         db.commit()
 
+    # 4. Seed borrow requests (NF-005 / TC-PERF-02)
+    existing_requests_count = db.query(BorrowRequest).count()
+    if num_requests > 0 and existing_requests_count < num_requests:
+        needed_requests = num_requests - existing_requests_count
+        rng_req = random.Random(42)  # Deterministic seed for reproducible benchmarks
+        book_isbns = [b.isbn for b in db.query(Book.isbn).all()]
+
+        new_requests: list[BorrowRequest] = []
+        for _i in range(needed_requests):
+            borrower_id = rng_req.choice(user_ids)
+            location = rng_req.choice(CAMPUS_LOCATIONS)
+
+            # ~60% ISBN requests, ~40% title/discipline query requests
+            if rng_req.random() < 0.60 and book_isbns:
+                isbn = rng_req.choice(book_isbns)
+                query = None
+            else:
+                disc = rng_req.choice(DISCIPLINES)
+                sub = rng_req.choice(SUBTOPICS)
+                query = f"{disc}: {sub}" if rng_req.random() < 0.5 else disc
+                isbn = None
+
+            request_obj = BorrowRequest(
+                borrower_id=borrower_id,
+                isbn=isbn,
+                query=query,
+                location=location,
+                status="OPEN",
+            )
+            new_requests.append(request_obj)
+
+        chunk_size = 500
+        for i in range(0, len(new_requests), chunk_size):
+            chunk = new_requests[i : i + chunk_size]
+            db.add_all(chunk)
+            db.flush()
+        db.commit()
+
     elapsed = time.perf_counter() - start_time
     total_users = db.query(User).count()
     total_books = db.query(Book).count()
     total_listings = db.query(Listing).count()
+    total_requests = db.query(BorrowRequest).count()
 
     return {
         "users": total_users,
         "books": total_books,
         "listings": total_listings,
+        "requests": total_requests,
         "duration_seconds": round(elapsed, 3),
     }
 
@@ -260,6 +305,9 @@ def main() -> None:
     parser.add_argument("--books", type=int, default=2000, help="Number of books (default: 2000)")
     parser.add_argument(
         "--listings", type=int, default=10000, help="Number of listings (default: 10000)"
+    )
+    parser.add_argument(
+        "--requests", type=int, default=1000, help="Number of borrow requests (default: 1000)"
     )
     parser.add_argument("--clean", action="store_true", help="Clean synthetic data before seeding")
     parser.add_argument(
@@ -287,12 +335,14 @@ def main() -> None:
             num_users=args.users,
             num_books=args.books,
             num_listings=args.listings,
+            num_requests=args.requests,
             clean_first=args.clean,
         )
         print("Seeding completed successfully:")
         print(f"  Total users in DB: {result['users']}")
         print(f"  Total books in DB: {result['books']}")
         print(f"  Total listings in DB: {result['listings']}")
+        print(f"  Total requests in DB: {result['requests']}")
         print(f"  Duration: {result['duration_seconds']}s")
     finally:
         db.close()
