@@ -2,8 +2,8 @@
 
 | Item | Value |
 | :--- | :--- |
-| Generated | 04 Nov 2026 14:50 |
-| Commit | `77b5d7f (+ uncommitted changes)` |
+| Generated | 05 Nov 2026 12:42 |
+| Commit | `653560e (+ uncommitted changes)` |
 | Python | 3.13.17 on Linux |
 | Command | `python scripts/generate_test_reports.py` (runs `pytest` in `backend/`) |
 
@@ -11,7 +11,7 @@
 
 | Branches | Covered | Partially or not covered | Branch coverage |
 | ---: | ---: | ---: | ---: |
-| 280 | 229 | 51 | **81.8%** |
+| 310 | 260 | 50 | **83.9%** |
 
 Branch coverage is switched on with `branch = true` in `backend/pyproject.toml`.
 
@@ -21,11 +21,12 @@ Branch coverage is switched on with `branch = true` in `backend/pyproject.toml`.
 | :--- | ---: | ---: | ---: | ---: |
 | `app/config.py` | 4 | 4 | 0 | 100% |
 | `app/login_rate_limit.py` | 10 | 10 | 0 | 100% |
-| `app/routers/auth.py` | 40 | 31 | 9 | 78% |
-| `app/routers/exchanges.py` | 40 | 38 | 2 | 95% |
+| `app/routers/admin.py` | 8 | 5 | 3 | 62% |
+| `app/routers/auth.py` | 42 | 36 | 6 | 86% |
+| `app/routers/exchanges.py` | 52 | 47 | 5 | 90% |
 | `app/routers/listings.py` | 58 | 48 | 10 | 83% |
 | `app/routers/matches.py` | 2 | 2 | 0 | 100% |
 | `app/routers/notifications.py` | 4 | 3 | 1 | 75% |
 | `app/routers/requests.py` | 38 | 26 | 12 | 68% |
-| `app/services/matching.py` | 78 | 64 | 14 | 82% |
+| `app/services/matching.py` | 86 | 76 | 10 | 88% |
 | `app/services/notifications.py` | 6 | 3 | 3 | 50% |

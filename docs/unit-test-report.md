@@ -2,8 +2,8 @@
 
 | Item | Value |
 | :--- | :--- |
-| Generated | 04 Nov 2026 14:50 |
-| Commit | `77b5d7f (+ uncommitted changes)` |
+| Generated | 05 Nov 2026 12:42 |
+| Commit | `653560e (+ uncommitted changes)` |
 | Python | 3.13.17 on Linux |
 | Command | `python scripts/generate_test_reports.py` (runs `pytest` in `backend/`) |
 
@@ -11,7 +11,7 @@
 
 | Total | Passed | Failed | Skipped | Duration |
 | ---: | ---: | ---: | ---: | ---: |
-| 133 | 133 | 0 | 0 | 16.9 s |
+| 172 | 172 | 0 | 0 | 27.2 s |
 
 Database: in-memory SQLite for unit tests. PostgreSQL-only behaviour is exercised by the
 CI migration step against a real PostgreSQL service.
@@ -20,13 +20,14 @@ CI migration step against a real PostgreSQL service.
 
 | Test file | Tests | Passed | Failed | Skipped |
 | :--- | ---: | ---: | ---: | ---: |
+| `tests/test_admin.py` | 8 | 8 | 0 | 0 |
 | `tests/test_auth_login.py` | 7 | 7 | 0 | 0 |
 | `tests/test_auth_logout.py` | 8 | 8 | 0 | 0 |
 | `tests/test_auth_register.py` | 3 | 3 | 0 | 0 |
 | `tests/test_config.py` | 2 | 2 | 0 | 0 |
 | `tests/test_config_database_url.py` | 3 | 3 | 0 | 0 |
 | `tests/test_exchange_return.py` | 9 | 9 | 0 | 0 |
-| `tests/test_exchanges.py` | 19 | 19 | 0 | 0 |
+| `tests/test_exchanges.py` | 23 | 23 | 0 | 0 |
 | `tests/test_health.py` | 2 | 2 | 0 | 0 |
 | `tests/test_listings.py` | 14 | 14 | 0 | 0 |
 | `tests/test_login_rate_limit.py` | 5 | 5 | 0 | 0 |
@@ -35,9 +36,11 @@ CI migration step against a real PostgreSQL service.
 | `tests/test_matching.py` | 12 | 12 | 0 | 0 |
 | `tests/test_models.py` | 8 | 8 | 0 | 0 |
 | `tests/test_notifications.py` | 7 | 7 | 0 | 0 |
-| `tests/test_perf_seed.py` | 4 | 4 | 0 | 0 |
+| `tests/test_perf_seed.py` | 7 | 7 | 0 | 0 |
 | `tests/test_profile.py` | 7 | 7 | 0 | 0 |
+| `tests/test_ratings.py` | 16 | 16 | 0 | 0 |
 | `tests/test_requests.py` | 8 | 8 | 0 | 0 |
+| `tests/test_security_evidence.py` | 8 | 8 | 0 | 0 |
 
 ## Failures
 
