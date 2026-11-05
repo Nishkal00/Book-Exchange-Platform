@@ -62,6 +62,11 @@ function ExchangesPage({ user, initialExchangeId, onClearInitialExchange, onNavi
   const [actionBusy, setActionBusy] = useState(false);
   const [notice, setNotice] = useState({ text: "", type: "" });
 
+  // Rating state (F-031)
+  const [ratingInput, setRatingInput] = useState(5);
+  const [ratingSubmitted, setRatingSubmitted] = useState(false);
+  const [ratingBusy, setRatingBusy] = useState(false);
+
   // 1. Fetch user's exchanges list
   const loadExchanges = useCallback(async () => {
     setLoading(true);
@@ -90,6 +95,8 @@ function ExchangesPage({ user, initialExchangeId, onClearInitialExchange, onNavi
     setNotice({ text: "", type: "" });
     setContact(null);
     setContactNotice("");
+    setRatingSubmitted(false);
+    setRatingInput(5);
 
     try {
       const res = await api.get(`/api/v1/exchanges/${exchangeId}`, authConfig());
@@ -127,27 +134,44 @@ function ExchangesPage({ user, initialExchangeId, onClearInitialExchange, onNavi
   const handleOpenExchange = useCallback((ex) => {
     setSelectedExchange(ex);
     loadDetail(ex.id);
-  }, [loadDetail]);
+    onNavigate?.("exchanges", ex.id);
+  }, [loadDetail, onNavigate]);
 
+  // Synchronize selected exchange with initialExchangeId prop (handles direct URL & browser back/forward)
   useEffect(() => {
-    if (initialExchangeId && exchanges.length > 0) {
-      const target = exchanges.find((e) => e.id === Number(initialExchangeId));
-      if (target) {
-        handleOpenExchange(target);
-      } else {
-        // Exchange might not be in the initial page; fetch detail directly
-        setSelectedExchange({ id: Number(initialExchangeId) });
-        loadDetail(Number(initialExchangeId));
+    if (initialExchangeId) {
+      const idNum = Number(initialExchangeId);
+      if (!selectedExchange || selectedExchange.id !== idNum) {
+        const target = exchanges.find((e) => e.id === idNum);
+        setSelectedExchange(target || { id: idNum });
+        loadDetail(idNum);
       }
-      onClearInitialExchange?.();
+    } else if (selectedExchange) {
+      // initialExchangeId is null (e.g. user navigated back to /exchanges)
+      setSelectedExchange(null);
+      setExchangeDetail(null);
+      setContact(null);
     }
-  }, [initialExchangeId, exchanges, handleOpenExchange, loadDetail, onClearInitialExchange]);
+  }, [initialExchangeId, loadDetail]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When exchanges list loads/updates, enrich selectedExchange with any missing metadata
+  useEffect(() => {
+    if (selectedExchange && exchanges.length > 0) {
+      const target = exchanges.find((e) => e.id === selectedExchange.id);
+      if (target) {
+        setSelectedExchange((prev) => (prev ? { ...target, ...prev } : target));
+      }
+    }
+  }, [exchanges]);
 
   function handleBackToList() {
     setSelectedExchange(null);
     setExchangeDetail(null);
     setContact(null);
     setNotice({ text: "", type: "" });
+    setRatingSubmitted(false);
+    setRatingInput(5);
+    onNavigate?.("exchanges", null);
     loadExchanges();
   }
 
@@ -234,6 +258,75 @@ function ExchangesPage({ user, initialExchangeId, onClearInitialExchange, onNavi
     }
   }
 
+  // 6. Confirm Return (F-026 / TC-EXC-02)
+  async function handleConfirmReturn() {
+    if (
+      !window.confirm(
+        "Confirm that you have returned/received this book? Once both participants confirm, the exchange moves to RETURNED and the listing becomes AVAILABLE again."
+      )
+    ) {
+      return;
+    }
+
+    setNotice({ text: "", type: "" });
+    setActionBusy(true);
+    try {
+      const res = await api.post(
+        `/api/v1/exchanges/${selectedExchange.id}/return`,
+        {},
+        authConfig()
+      );
+      setExchangeDetail(res.data);
+      if (res.data.state === "RETURNED") {
+        setNotice({
+          text: "Both participants confirmed! The exchange is now RETURNED and the book listing is AVAILABLE again.",
+          type: "success",
+        });
+      } else {
+        setNotice({
+          text: "Your return confirmation has been recorded! Waiting for your partner's confirmation to complete the exchange.",
+          type: "success",
+        });
+      }
+      loadExchanges();
+    } catch (error) {
+      setNotice({ text: errorText(error, "Could not confirm return."), type: "error" });
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  // 7. Rate Partner after Return (F-031 / TC-RAT-01)
+  async function handleRatePartner(event) {
+    event.preventDefault();
+    setRatingBusy(true);
+    setNotice({ text: "", type: "" });
+    try {
+      const res = await api.post(
+        `/api/v1/exchanges/${selectedExchange.id}/ratings`,
+        { rating: Number(ratingInput) },
+        authConfig()
+      );
+      setRatingSubmitted(true);
+      setNotice({
+        text: `Rating of ${res.data.rating} ★ submitted! Partner's updated average rating: ${res.data.recipient_avg_rating.toFixed(1)} ★.`,
+        type: "success",
+      });
+    } catch (error) {
+      if (error?.response?.status === 409) {
+        setRatingSubmitted(true);
+        setNotice({
+          text: "You have already submitted a rating for this exchange partner.",
+          type: "success",
+        });
+      } else {
+        setNotice({ text: errorText(error, "Could not submit rating."), type: "error" });
+      }
+    } finally {
+      setRatingBusy(false);
+    }
+  }
+
   // Filter exchanges list
   const filteredExchanges = exchanges.filter((ex) => {
     if (tabFilter === "ACTIVE") return ex.state === "ACCEPTED" || ex.state === "ON_LOAN";
@@ -241,6 +334,47 @@ function ExchangesPage({ user, initialExchangeId, onClearInitialExchange, onNavi
     if (tabFilter === "CANCELLED") return ex.state === "CANCELLED";
     return true;
   });
+
+  // Derived participant & confirmation state for detail view
+  const isBorrower =
+    (user && exchangeDetail && user.id === exchangeDetail.borrower_id) ||
+    selectedExchange?.role === "borrower";
+  const isLender =
+    (user && exchangeDetail && user.id === exchangeDetail.lender_id) ||
+    selectedExchange?.role === "lender";
+  const partnerName =
+    selectedExchange?.partner_name ||
+    selectedExchange?.partner_display_name ||
+    contact?.name ||
+    "Partner";
+
+  const returnEvents = (exchangeDetail?.events || []).filter(
+    (e) => e.event_type === "RETURN_CONFIRMED"
+  );
+  const hasBorrowerReturnEvent = returnEvents.some(
+    (e) => e.actor_id === exchangeDetail?.borrower_id
+  );
+  const hasLenderReturnEvent = returnEvents.some(
+    (e) => e.actor_id === exchangeDetail?.lender_id
+  );
+
+  const borrowerConfirmed = Boolean(
+    exchangeDetail?.borrower_return_confirmed ??
+      exchangeDetail?.borrowerReturnConfirmed ??
+      hasBorrowerReturnEvent ??
+      exchangeDetail?.state === "RETURNED"
+  );
+  const lenderConfirmed = Boolean(
+    exchangeDetail?.lender_return_confirmed ??
+      exchangeDetail?.lenderReturnConfirmed ??
+      hasLenderReturnEvent ??
+      exchangeDetail?.state === "RETURNED"
+  );
+  const userConfirmedReturn = isBorrower
+    ? borrowerConfirmed
+    : isLender
+    ? lenderConfirmed
+    : false;
 
   return (
     <section className="browse-page exchanges-page">
@@ -281,16 +415,16 @@ function ExchangesPage({ user, initialExchangeId, onClearInitialExchange, onNavi
                 <div className="exchange-header-card">
                   <div className="exchange-header-info">
                     <span className="exchange-id-tag">Exchange #{exchangeDetail.id}</span>
-                    <h2>{selectedExchange.book_title || "Book Exchange"}</h2>
-                    {selectedExchange.book_author && (
-                      <p className="author-line">by {selectedExchange.book_author}</p>
+                    <h2>{selectedExchange?.book_title || exchangeDetail.book_title || "Book Exchange"}</h2>
+                    {(selectedExchange?.book_author || exchangeDetail.book_author) && (
+                      <p className="author-line">by {selectedExchange?.book_author || exchangeDetail.book_author}</p>
                     )}
                     <div className="exchange-badges">
                       <span className={`badge ${STATE_LABELS[exchangeDetail.state]?.className || ""}`}>
                         {STATE_LABELS[exchangeDetail.state]?.label || exchangeDetail.state}
                       </span>
                       <span className="badge role-badge">
-                        You are the {selectedExchange.role === "lender" ? "Lender" : "Borrower"}
+                        You are the {isLender ? "Lender" : isBorrower ? "Borrower" : "Participant"}
                       </span>
                     </div>
                   </div>
@@ -441,13 +575,77 @@ function ExchangesPage({ user, initialExchangeId, onClearInitialExchange, onNavi
 
                       {exchangeDetail.state === "ON_LOAN" && (
                         <div className="action-block on-loan-block">
-                          <h4>Currently On Loan</h4>
-                          <p>
+                          <div className="on-loan-status-header">
+                            <h4>Currently On Loan</h4>
+                            <span className="badge status-on-loan">Active Loan</span>
+                          </div>
+                          <p className="on-loan-meta">
                             Handover confirmed on {formatDate(exchangeDetail.handover_confirmed_at)}.
-                          </p>
-                          <p>
+                            <br />
                             Book should be returned on or before <strong>{formatDate(exchangeDetail.due_at)}</strong>.
                           </p>
+
+                          {/* Two-Sided Return Confirmation (F-026 / TC-EXC-02) */}
+                          <div className="return-confirmation-box">
+                            <div className="return-box-header">
+                              <h5>Return Confirmation (F-026)</h5>
+                              <span className="f-tag">TC-EXC-02</span>
+                            </div>
+                            <p className="return-box-instruction">
+                              Both participants must confirm the physical return. Once both have confirmed, the exchange transitions to <strong>RETURNED</strong> and the listing becomes <strong>AVAILABLE</strong> again in the catalog.
+                            </p>
+
+                            <div className="return-confirmation-grid">
+                              <div className={`participant-status-card ${borrowerConfirmed ? "confirmed" : "pending"}`}>
+                                <div className="status-avatar-circle">
+                                  {borrowerConfirmed ? "✓" : "⏳"}
+                                </div>
+                                <div className="status-detail-text">
+                                  <span className="status-role">
+                                    Borrower {isBorrower ? "(You)" : `(${partnerName})`}
+                                  </span>
+                                  <span className="status-badge-text">
+                                    {borrowerConfirmed ? "Confirmed Return" : "Pending Confirmation"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className={`participant-status-card ${lenderConfirmed ? "confirmed" : "pending"}`}>
+                                <div className="status-avatar-circle">
+                                  {lenderConfirmed ? "✓" : "⏳"}
+                                </div>
+                                <div className="status-detail-text">
+                                  <span className="status-role">
+                                    Lender {isLender ? "(You)" : `(${partnerName})`}
+                                  </span>
+                                  <span className="status-badge-text">
+                                    {lenderConfirmed ? "Confirmed Return" : "Pending Confirmation"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="return-actions-row">
+                              {!userConfirmedReturn ? (
+                                <button
+                                  className="primary-btn confirm-return-btn"
+                                  type="button"
+                                  disabled={actionBusy}
+                                  onClick={handleConfirmReturn}
+                                >
+                                  {actionBusy ? "Confirming Return..." : "Confirm Return"}
+                                </button>
+                              ) : (
+                                <div className="confirmed-pending-partner">
+                                  <span className="confirmed-check">✓</span>
+                                  <div>
+                                    <strong>You have confirmed return.</strong>
+                                    <p>Waiting for {partnerName} to confirm return.</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       )}
 
@@ -462,8 +660,81 @@ function ExchangesPage({ user, initialExchangeId, onClearInitialExchange, onNavi
 
                       {exchangeDetail.state === "RETURNED" && (
                         <div className="action-block returned-block">
-                          <h4>Exchange Completed</h4>
-                          <p>The book return has been confirmed. Thank you for sharing!</p>
+                          <div className="returned-header">
+                            <div className="returned-badge-circle">✓</div>
+                            <div>
+                              <h4>Exchange Completed (RETURNED)</h4>
+                              <span className="returned-timestamp">
+                                Returned on {formatDate(exchangeDetail.returned_at)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="listing-available-banner">
+                            <span className="available-icon">📦</span>
+                            <div className="available-text">
+                              <strong>Book Listing is now AVAILABLE</strong>
+                              <p>
+                                The exchange is complete. The book listing has returned to <strong>AVAILABLE</strong> status and is open for future student requests.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="return-confirmation-grid">
+                            <div className="participant-status-card confirmed">
+                              <div className="status-avatar-circle">✓</div>
+                              <div className="status-detail-text">
+                                <span className="status-role">
+                                  Borrower {isBorrower ? "(You)" : `(${partnerName})`}
+                                </span>
+                                <span className="status-badge-text">Confirmed Return</span>
+                              </div>
+                            </div>
+
+                            <div className="participant-status-card confirmed">
+                              <div className="status-avatar-circle">✓</div>
+                              <div className="status-detail-text">
+                                <span className="status-role">
+                                  Lender {isLender ? "(You)" : `(${partnerName})`}
+                                </span>
+                                <span className="status-badge-text">Confirmed Return</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Rating section (F-031 / TC-RAT-01) */}
+                          <div className="return-rating-section">
+                            <div className="rating-header">
+                              <h5>Rate your exchange with {partnerName}</h5>
+                              <span className="f-tag">F-031</span>
+                            </div>
+                            {ratingSubmitted ? (
+                              <div className="rating-confirmed-box">
+                                <span className="star-icon">★</span>
+                                <span>Thank you! Your rating for {partnerName} has been recorded.</span>
+                              </div>
+                            ) : (
+                              <form onSubmit={handleRatePartner} className="rating-form">
+                                <div className="rating-form-group">
+                                  <select
+                                    id="ratingSelect"
+                                    value={ratingInput}
+                                    onChange={(e) => setRatingInput(e.target.value)}
+                                    disabled={ratingBusy}
+                                  >
+                                    <option value={5}>★★★★★ 5 - Excellent</option>
+                                    <option value={4}>★★★★☆ 4 - Good</option>
+                                    <option value={3}>★★★☆☆ 3 - Average</option>
+                                    <option value={2}>★★☆☆☆ 2 - Below Average</option>
+                                    <option value={1}>★☆☆☆☆ 1 - Poor</option>
+                                  </select>
+                                  <button className="primary-btn rate-btn" type="submit" disabled={ratingBusy}>
+                                    {ratingBusy ? "Submitting..." : "Submit Rating"}
+                                  </button>
+                                </div>
+                              </form>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -487,6 +758,16 @@ function ExchangesPage({ user, initialExchangeId, onClearInitialExchange, onNavi
                                   ? "Handover confirmed (On Loan)"
                                   : evt.event_type === "CANCELLED"
                                   ? "Exchange cancelled before handover"
+                                  : evt.event_type === "RETURN_CONFIRMED"
+                                  ? `Return confirmed by ${
+                                      evt.actor_id === user?.id
+                                        ? "you"
+                                        : evt.actor_id === exchangeDetail?.borrower_id
+                                        ? "borrower"
+                                        : "lender"
+                                    }`
+                                  : evt.event_type === "RETURNED"
+                                  ? "Both confirmed return (Listing is AVAILABLE again)"
                                   : evt.event_type}
                               </strong>
                               <span className="timeline-time">{formatDate(evt.created_at)}</span>
@@ -584,14 +865,35 @@ function ExchangesPage({ user, initialExchangeId, onClearInitialExchange, onNavi
                         <label>Partner:</label>
                         <span>{ex.partner_name || ex.partner_display_name || "Partner"}</span>
                       </div>
-                      <div className="meta-item">
-                        <label>Due Date:</label>
-                        <span>{ex.due_at ? formatDate(ex.due_at) : "Not agreed yet"}</span>
-                      </div>
-                      <div className="meta-item">
-                        <label>Created:</label>
-                        <span>{formatDate(ex.created_at)}</span>
-                      </div>
+                      {ex.state === "RETURNED" ? (
+                        <>
+                          <div className="meta-item">
+                            <label>Returned:</label>
+                            <span>{formatDate(ex.returned_at)}</span>
+                          </div>
+                          <div className="meta-item">
+                            <label>Listing:</label>
+                            <span className="listing-restored-tag">AVAILABLE</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="meta-item">
+                            <label>Due Date:</label>
+                            <span>{ex.due_at ? formatDate(ex.due_at) : "Not agreed yet"}</span>
+                          </div>
+                          <div className="meta-item">
+                            <label>Created:</label>
+                            <span>{formatDate(ex.created_at)}</span>
+                          </div>
+                          {ex.state === "ON_LOAN" && (ex.borrower_return_confirmed || ex.lender_return_confirmed) && (
+                            <div className="meta-item">
+                              <label>Return:</label>
+                              <span className="return-half-tag">1 of 2 Confirmed</span>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
 
                     <div className="exchange-card-actions">

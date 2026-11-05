@@ -216,7 +216,12 @@ function NotificationsPage({ user, onNavigate, onNotificationRead }) {
                         type="button"
                         onClick={() => {
                           if (!item.is_read) handleMarkRead(item.id);
-                          onNavigate?.("exchanges");
+                          const exMatch = item.event_key?.match(/^exchange:(\d+)/);
+                          if (exMatch) {
+                            onNavigate?.("exchanges", Number(exMatch[1]));
+                          } else {
+                            onNavigate?.("exchanges");
+                          }
                         }}
                       >
                         Go to Exchanges →

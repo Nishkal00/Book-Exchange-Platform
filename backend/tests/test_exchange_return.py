@@ -21,7 +21,11 @@ def events(db, event_type):
 def test_first_confirmation_keeps_exchange_on_loan(client, world, db, on_loan):  # noqa: F811
     response = client.post(f"{on_loan}/return", headers=auth(world["borrower"]))
     assert response.status_code == 200
-    assert response.json()["state"] == "ON_LOAN"
+    body = response.json()
+    assert body["state"] == "ON_LOAN"
+    assert body["borrower_return_confirmed"] is True
+    assert body["lender_return_confirmed"] is False
+    assert body["returned_at"] is None
     db.refresh(world["listing"])
     assert world["listing"].status == "ON_LOAN"
     assert events(db, "RETURN_CONFIRMED") == 1
@@ -34,6 +38,9 @@ def test_second_confirmation_returns_exchange_and_frees_listing(client, world, d
     assert response.status_code == 200
     body = response.json()
     assert body["state"] == "RETURNED"
+    assert body["borrower_return_confirmed"] is True
+    assert body["lender_return_confirmed"] is True
+    assert body["returned_at"] is not None
     db.refresh(world["listing"])
     db.refresh(world["exchange"])
     assert world["listing"].status == "AVAILABLE"

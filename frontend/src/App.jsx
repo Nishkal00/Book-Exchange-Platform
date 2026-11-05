@@ -4,6 +4,7 @@ import { api } from "./api.js";
 import ExchangesPage from "./ExchangesPage.jsx";
 import NotificationsPage from "./NotificationsPage.jsx";
 import RequestsPage from "./RequestsPage.jsx";
+import { getPathForRoute, parseLocation } from "./routes.js";
 import "./styles.css";
 
 const PAGE_SIZE = 20;
@@ -14,10 +15,49 @@ const EMPTY_FILTERS = {
   location: "",
 };
 
+function getStoredUser() {
+  try {
+    const token = localStorage.getItem("bep_token");
+    const saved = localStorage.getItem("bep_user");
+
+    if (!token || !saved) {
+      localStorage.removeItem("bep_token");
+      localStorage.removeItem("bep_user");
+      return null;
+    }
+
+    return JSON.parse(saved);
+  } catch {
+    localStorage.removeItem("bep_token");
+    localStorage.removeItem("bep_user");
+    return null;
+  }
+}
+
 function App() {
-  const [page, setPage] = useState("home");
+  // Restore only a valid locally stored session.
+  const [user, setUser] = useState(getStoredUser);
+
+  // Restore initial page and parameters from window.location
+  const initialRoute = parseLocation(typeof window !== "undefined" ? window.location.pathname : "/");
+  const isProtectedInitial =
+    initialRoute.page === "mine" ||
+    initialRoute.page === "profile" ||
+    initialRoute.page === "requests" ||
+    initialRoute.page === "exchanges" ||
+    initialRoute.page === "notifications";
+
+  const initialNeedsLogin = isProtectedInitial && !user;
+  const initialPage = initialNeedsLogin ? "login" : initialRoute.page;
+  const initialExchangeId = initialNeedsLogin ? null : initialRoute.exchangeId;
+
+  const [page, setPage] = useState(initialPage);
+  const [selectedExchangeId, setSelectedExchangeId] = useState(initialExchangeId);
+  const [redirectPath, setRedirectPath] = useState(
+    initialNeedsLogin ? getPathForRoute(initialRoute.page, initialRoute.exchangeId) : null
+  );
+
   const [requestPrefill, setRequestPrefill] = useState(null);
-  const [selectedExchangeId, setSelectedExchangeId] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [apiStatus, setApiStatus] = useState("Checking...");
   const [registerSchema, setRegisterSchema] = useState(null);
@@ -28,29 +68,11 @@ function App() {
     password: "",
   });
 
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
+  const [message, setMessage] = useState(
+    initialNeedsLogin ? "Please sign in to access this page." : ""
+  );
+  const [messageType, setMessageType] = useState(initialNeedsLogin ? "error" : "");
   const [loading, setLoading] = useState(false);
-
-  // Restore only a valid locally stored session.
-  const [user, setUser] = useState(() => {
-    try {
-      const token = localStorage.getItem("bep_token");
-      const saved = localStorage.getItem("bep_user");
-
-      if (!token || !saved) {
-        localStorage.removeItem("bep_token");
-        localStorage.removeItem("bep_user");
-        return null;
-      }
-
-      return JSON.parse(saved);
-    } catch {
-      localStorage.removeItem("bep_token");
-      localStorage.removeItem("bep_user");
-      return null;
-    }
-  });
 
   const fetchUnreadCount = useCallback(async () => {
     if (!user) {
@@ -70,6 +92,69 @@ function App() {
   useEffect(() => {
     fetchUnreadCount();
   }, [fetchUnreadCount, page]);
+
+  // Synchronize browser history and listen for popstate (back/forward buttons)
+  useEffect(() => {
+    // 1. Initial URL synchronization: Ensure browser URL matches initialPage
+    const targetPath = getPathForRoute(initialPage, initialExchangeId);
+    if (initialNeedsLogin) {
+      window.history.replaceState({ page: "login", redirect: redirectPath }, "", "/login");
+    } else if (window.location.pathname !== targetPath) {
+      window.history.replaceState(
+        { page: initialPage, exchangeId: initialExchangeId },
+        "",
+        targetPath
+      );
+    } else if (!window.history.state) {
+      window.history.replaceState(
+        { page: initialPage, exchangeId: initialExchangeId },
+        "",
+        targetPath
+      );
+    }
+
+    // 2. Popstate listener for back and forward browser buttons
+    function handlePopState() {
+      const { page: nextTargetPage, exchangeId: nextExchangeId } = parseLocation(
+        window.location.pathname
+      );
+
+      const isProtected =
+        nextTargetPage === "mine" ||
+        nextTargetPage === "profile" ||
+        nextTargetPage === "requests" ||
+        nextTargetPage === "exchanges" ||
+        nextTargetPage === "notifications";
+
+      const token = localStorage.getItem("bep_token");
+      if (isProtected && !token) {
+        const intended = getPathForRoute(nextTargetPage, nextExchangeId);
+        setRedirectPath(intended);
+        setPage("login");
+        setSelectedExchangeId(null);
+        setMessage("Please sign in to access this page.");
+        setMessageType("error");
+        window.history.replaceState({ page: "login", redirect: intended }, "", "/login");
+        return;
+      }
+
+      setPage(nextTargetPage);
+      setSelectedExchangeId(nextExchangeId);
+      setMessage("");
+      setMessageType("");
+      setListingError("");
+
+      if (nextTargetPage === "browse" || nextTargetPage === "mine") {
+        setCurrentPage(1);
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
@@ -273,26 +358,46 @@ function App() {
   // Navigation
   // --------------------------------------------------
 
-  function navigate(nextPage, extra = null) {
-    if (
-      (nextPage === "mine" ||
-        nextPage === "profile" ||
-        nextPage === "requests" ||
-        nextPage === "exchanges" ||
-        nextPage === "notifications") &&
-      !user
-    ) {
+  function navigate(nextPage, extra = null, options = {}) {
+    const { replace = false } = options;
+
+    const isProtected =
+      nextPage === "mine" ||
+      nextPage === "profile" ||
+      nextPage === "requests" ||
+      nextPage === "exchanges" ||
+      nextPage === "notifications";
+
+    if (isProtected && !user) {
+      const intended = getPathForRoute(nextPage, extra);
+      setRedirectPath(intended);
       setPage("login");
+      setSelectedExchangeId(null);
       setMessage("Please sign in to access this page.");
       setMessageType("error");
+
+      if (window.location.pathname !== "/login") {
+        if (replace) {
+          window.history.replaceState({ page: "login", redirect: intended }, "", "/login");
+        } else {
+          window.history.pushState({ page: "login", redirect: intended }, "", "/login");
+        }
+      }
       return;
     }
 
-    if (nextPage === "exchanges" && extra) {
-      setSelectedExchangeId(extra);
+    const nextExchangeId = nextPage === "exchanges" ? (extra ? Number(extra) : null) : null;
+    const targetPath = getPathForRoute(nextPage, nextExchangeId);
+
+    // Push or replace entry in browser history
+    if (replace) {
+      window.history.replaceState({ page: nextPage, exchangeId: nextExchangeId }, "", targetPath);
+    } else if (window.location.pathname !== targetPath) {
+      window.history.pushState({ page: nextPage, exchangeId: nextExchangeId }, "", targetPath);
     }
 
     setPage(nextPage);
+    setSelectedExchangeId(nextExchangeId);
     setMessage("");
     setMessageType("");
     setListingError("");
@@ -394,10 +499,14 @@ function App() {
       setMessage(`Welcome back, ${loggedInUser.name}!`);
       setMessageType("success");
 
-      // Move to Browse after successful authentication.
-      setPage("browse");
-      setCurrentPage(1);
-      setListingError("");
+      // Redirect to saved destination if user was redirected to sign in
+      if (redirectPath) {
+        const dest = parseLocation(redirectPath);
+        setRedirectPath(null);
+        navigate(dest.page, dest.exchangeId, { replace: true });
+      } else {
+        navigate("browse", null, { replace: true });
+      }
     } catch (error) {
       setMessage(
         error.response
@@ -442,7 +551,7 @@ function App() {
     setMessageType("success");
     setListingError("");
 
-    setPage("home");
+    navigate("home", null, { replace: true });
   }
 
   // --------------------------------------------------
@@ -1236,7 +1345,6 @@ function App() {
           <ExchangesPage
             user={user}
             initialExchangeId={selectedExchangeId}
-            onClearInitialExchange={() => setSelectedExchangeId(null)}
             onNavigate={navigate}
           />
         )}
