@@ -1,0 +1,6 @@
+# One identity per person so contribution counts in git shortlog / GitHub are correct.
+# Format: Proper Name <proper@email> Commit Name <commit@email>
+Nishkal M R <erenystrike@gmail.com> Nishkal <nishkalmr321@gmail.com>
+Nishkal M R <erenystrike@gmail.com> Nishkal M R <nishkalmr321@gmail.com>
+Nishkal M R <erenystrike@gmail.com> Nishkal00 <erenystrike@gmail.com>
+K R Manoj <manojkanuru2006@gmail.com> Manoj-kanur <manojkanuru2006@gmail.com>
