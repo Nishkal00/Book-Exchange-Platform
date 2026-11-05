@@ -301,3 +301,51 @@ class Notification(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="notifications")
+
+
+class Rating(Base):
+    """A participant's rating of their partner after a returned exchange."""
+
+    __tablename__ = "ratings"
+
+    __table_args__ = (
+        CheckConstraint(
+            "rating BETWEEN 1 AND 5",
+            name="ck_ratings_value",
+        ),
+        CheckConstraint(
+            "rater_id != ratee_id",
+            name="ck_ratings_no_self_rating",
+        ),
+        UniqueConstraint(
+            "exchange_id",
+            "rater_id",
+            name="uq_ratings_exchange_rater",
+        ),
+        Index("ix_ratings_ratee", "ratee_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    exchange_id: Mapped[int] = mapped_column(
+        ForeignKey("exchanges.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    rater_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    ratee_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )

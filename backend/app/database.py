@@ -10,8 +10,8 @@ class Base(DeclarativeBase):
     pass
 
 
-def make_engine(url: str | None = None):
-    return create_engine(url or get_settings().database_url, pool_pre_ping=True)
+def make_engine(url: str | None = None, **kwargs):
+    return create_engine(url or get_settings().database_url, pool_pre_ping=True, **kwargs)
 
 
 engine = make_engine()

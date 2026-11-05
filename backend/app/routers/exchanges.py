@@ -1,16 +1,17 @@
-"""Exchanges router: history, contact disclosure, due date, handover and cancellation."""
+"""Exchanges router: history, contact disclosure, due date, handover, cancellation and ratings."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models import BorrowRequest, Exchange, ExchangeEvent, Listing, User
+from app.models import BorrowRequest, Exchange, ExchangeEvent, Listing, Rating, User
 from app.routers.auth import get_current_user
 from app.services.notifications import create_notification
 
@@ -26,6 +27,26 @@ class DueDatePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     due_at: datetime
+
+
+class RatingPayload(BaseModel):
+    """Request body for submitting an exchange-partner rating."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rating: int = Field(strict=True, ge=1, le=5)
+
+
+class RatingOut(BaseModel):
+    """Accepted rating and the recipient's updated average."""
+
+    id: int
+    exchange_id: int
+    rater_id: int
+    ratee_id: int
+    rating: int
+    created_at: datetime
+    recipient_avg_rating: float
 
 
 class ExchangeEventOut(BaseModel):
@@ -652,3 +673,102 @@ def confirm_return(
     db.commit()
 
     return _serialize(db, exchange)
+
+
+# ---------------------------------------------------------------------------
+# F-031: Ratings
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{exchange_id}/ratings",
+    response_model=RatingOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def submit_rating(
+    exchange_id: int,
+    payload: RatingPayload,
+    current_user: User = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> RatingOut:
+    """Allow each exchange participant to rate their partner once after return."""
+
+    exchange = _load_exchange(db, exchange_id, current_user)
+    _require_state(exchange, "RETURNED")
+
+    borrower_id = exchange.request.borrower_id
+    lender_id = exchange.listing.owner_id
+
+    if current_user.id == borrower_id:
+        ratee_id = lender_id
+    elif current_user.id == lender_id:
+        ratee_id = borrower_id
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="NOT_AN_EXCHANGE_PARTICIPANT",
+        )
+
+    if current_user.id == ratee_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="SELF_RATING_NOT_ALLOWED",
+        )
+
+    existing_rating = db.execute(
+        select(Rating).where(
+            Rating.exchange_id == exchange_id,
+            Rating.rater_id == current_user.id,
+        )
+    ).scalar_one_or_none()
+
+    if existing_rating is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="RATING_ALREADY_SUBMITTED",
+        )
+
+    new_rating = Rating(
+        exchange_id=exchange_id,
+        rater_id=current_user.id,
+        ratee_id=ratee_id,
+        rating=payload.rating,
+    )
+    db.add(new_rating)
+
+    try:
+        # Flush first so the new rating is included in the aggregate query.
+        db.flush()
+
+        average_rating = db.execute(
+            select(func.avg(Rating.rating)).where(Rating.ratee_id == ratee_id)
+        ).scalar_one()
+
+        recipient = db.get(User, ratee_id)
+        if recipient is None:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="RATING_RECIPIENT_NOT_FOUND",
+            )
+
+        recipient.avg_rating = average_rating
+        db.commit()
+        db.refresh(new_rating)
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="RATING_ALREADY_SUBMITTED",
+        ) from None
+
+    return RatingOut(
+        id=new_rating.id,
+        exchange_id=new_rating.exchange_id,
+        rater_id=new_rating.rater_id,
+        ratee_id=new_rating.ratee_id,
+        rating=new_rating.rating,
+        created_at=new_rating.created_at,
+        recipient_avg_rating=float(recipient.avg_rating),
+    )
