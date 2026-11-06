@@ -12,6 +12,20 @@ A peer-to-peer student book lending and borrowing platform with authenticated li
 
 The documents form the initial project baseline. Implementation, CI runs and test execution are pending; no test is represented as passed.
 
+## Project management
+
+Sprint planning and the backlog are tracked in two places:
+
+- **Jira (primary):** [project BEP, board](https://nishkalmr321.atlassian.net/jira/software/projects/BEP/boards/3). Every pull request title carries its Jira key.
+- **GitHub Project (mirror):** [BEP Sprint 2 board](https://github.com/users/Nishkal00/projects/2). Each card carries its Jira key (BEP-nn) at the start of the title, and the status matches Jira.
+
+Board snapshots (6 Nov 2026):
+
+![BEP Sprint 2 board, Todo and In Progress](docs/github-project-board-1.png)
+![BEP Sprint 2 board, Done column part 1](docs/github-project-board-2.png)
+![BEP Sprint 2 board, Done column part 2](docs/github-project-board-3.png)
+![BEP Sprint 2 board, Done column part 3](docs/github-project-board-4.png)
+
 ## Team
 
 | Member | Responsibility |
