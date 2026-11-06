@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -18,6 +18,24 @@ class ModerationRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     reason: str = Field(min_length=1, max_length=1000)
+
+
+class AuditEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    actor_id: int
+    target: str
+    action: str
+    timestamp: datetime
+    reason: str
+
+
+class AuditEventPage(BaseModel):
+    items: list[AuditEventOut]
+    page: int
+    page_size: int
+    total: int
 
 
 @router.post("/users/{user_id}/deactivate")
@@ -110,3 +128,35 @@ def hide_listing(
         "listing_id": listing.id,
         "deleted_at": listing.deleted_at,
     }
+
+
+@router.get("/audit", response_model=AuditEventPage)
+def get_audit_log(
+    page: int = 1,
+    page_size: int = 20,
+    admin: User = Depends(get_current_admin),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+):
+    """Retrieve administrative audit events (BEP-45)."""
+
+    if page < 1 or page_size < 1 or page_size > 100:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Invalid pagination parameters",
+        )
+
+    total = db.scalar(select(func.count()).select_from(AuditEvent)) or 0
+
+    events = db.scalars(
+        select(AuditEvent)
+        .order_by(AuditEvent.timestamp.desc(), AuditEvent.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+
+    return AuditEventPage(
+        items=events,
+        page=page,
+        page_size=page_size,
+        total=total,
+    )
