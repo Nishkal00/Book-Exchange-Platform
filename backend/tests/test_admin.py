@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -249,3 +251,95 @@ def test_cannot_hide_listing_with_active_exchange(client, db, state):
     db.refresh(listing)
     assert listing.deleted_at is None
     assert db.query(AuditEvent).count() == 0
+
+
+def test_admin_can_view_audit_log(client, db, admin):
+    db.add(
+        AuditEvent(
+            actor_id=admin.id,
+            target="USER:101",
+            action="USER_DEACTIVATED",
+            reason="Policy violation",
+        )
+    )
+    db.commit()
+
+    response = client.get("/api/v1/admin/audit", headers=auth(admin))
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 1
+    assert data["items"][0]["actor_id"] == admin.id
+    assert data["items"][0]["target"] == "USER:101"
+
+
+def test_student_cannot_view_audit_log(client, db):
+    student = create_test_user(db, email="audit-student@example.edu")
+
+    response = client.get("/api/v1/admin/audit", headers=auth(student))
+
+    assert response.status_code == 403
+
+
+def test_anonymous_cannot_view_audit_log(client):
+    response = client.get("/api/v1/admin/audit")
+
+    assert response.status_code in (401, 403)
+
+
+def test_audit_response_exposes_only_allowed_fields(client, db, admin):
+    db.add(
+        AuditEvent(
+            actor_id=admin.id,
+            target="LISTING:101",
+            action="LISTING_HIDDEN",
+            reason="Policy violation",
+        )
+    )
+    db.commit()
+
+    response = client.get("/api/v1/admin/audit", headers=auth(admin))
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+
+    assert set(item.keys()) == {"id", "actor_id", "target", "action", "timestamp", "reason"}
+    assert not any(
+        field in item for field in ("password", "password_hash", "token", "token_version")
+    )
+
+
+def test_audit_log_pagination_and_newest_first(client, db, admin):
+    now = datetime.now(UTC)
+
+    for i in range(3):
+        db.add(
+            AuditEvent(
+                actor_id=admin.id,
+                target=f"USER:{i}",
+                action="USER_DEACTIVATED",
+                reason=f"Reason {i}",
+                timestamp=now + timedelta(minutes=i),
+            )
+        )
+
+    db.commit()
+
+    url = "/api/v1/admin/audit"
+    headers = auth(admin)
+
+    page1 = client.get(url, params={"page": 1, "page_size": 2}, headers=headers)
+    page2 = client.get(url, params={"page": 2, "page_size": 2}, headers=headers)
+
+    assert page1.status_code == 200
+    assert page2.status_code == 200
+
+    data1 = page1.json()
+    data2 = page2.json()
+
+    assert len(data1["items"]) == 2
+    assert len(data2["items"]) == 1
+    assert data1["total"] == 3
+    assert data1["items"][0]["target"] == "USER:2"
+    assert data1["items"][1]["target"] == "USER:1"
+    assert data2["items"][0]["target"] == "USER:0"
