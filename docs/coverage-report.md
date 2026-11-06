@@ -2,16 +2,16 @@
 
 | Item | Value |
 | :--- | :--- |
-| Generated | 05 Nov 2026 21:51 |
-| Commit | `ba0e726 (+ uncommitted changes)` |
-| Python | 3.13.7 on Windows |
+| Generated | 06 Nov 2026 18:01 |
+| Commit | `b3b9eec` |
+| Python | 3.13.17 on Linux |
 | Command | `python scripts/generate_test_reports.py` (runs `pytest` in `backend/`) |
 
 ## Summary
 
 | Statements | Missed | Statement coverage | CI gate |
 | ---: | ---: | ---: | :--- |
-| 1371 | 72 | **94.7%** | >= 70% (met) |
+| 1391 | 73 | **94.8%** | >= 70% (met) |
 
 The CI gate (`--cov-fail-under=70`) uses the combined statement and branch figure, currently 92.7%.
 
@@ -24,7 +24,7 @@ The CI gate (`--cov-fail-under=70`) uses the combined statement and branch figur
 | `app/login_rate_limit.py` | 42 | 0 | 100% |
 | `app/main.py` | 22 | 0 | 100% |
 | `app/models.py` | 134 | 0 | 100% |
-| `app/routers/admin.py` | 38 | 3 | 92% |
+| `app/routers/admin.py` | 58 | 4 | 93% |
 | `app/routers/auth.py` | 174 | 13 | 93% |
 | `app/routers/exchanges.py` | 302 | 9 | 97% |
 | `app/routers/listings.py` | 203 | 14 | 93% |

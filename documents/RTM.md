@@ -8,10 +8,10 @@
 | Project | Book Exchange Platform |
 | Document | Requirements Traceability Matrix |
 | Version | 1.1 |
-| Date | 5 November 2026 |
+| Date | 6 November 2026 |
 | Source Documents | SRS v1.0, SAD v1.0, Test Plan v1.1 |
 | Deployment | Render |
-| Verified Code Commit | `653560e` (main, 5 Nov 2026) |
+| Verified Code Commit | `b3b9eec` (main, 6 Nov 2026) |
 | CI Workflow Runs | #46 (31 Oct), every PR since |
 
 ---
@@ -56,7 +56,7 @@ Partially executed requirements remain N until all applicable tests are complete
 | F-026 | TC-EXC-02 | A | All linked test cases pass (see section 4). |
 | F-030 | TC-HIS-01 | A | All linked test cases pass (see section 4). |
 | F-031 | TC-RAT-01 | A | Rating is submitted for the partner of a RETURNED exchange; averages recomputed. |
-| F-040 | TC-ADM-01, TC-ADM-02 | F | Deactivate and hide with audit rows pass. Audit read endpoint missing: TC-ADM-02 fails (BEP-45). |
+| F-040 | TC-ADM-01, TC-ADM-02 | A | Deactivate and hide write audit rows; admins read them through GET /api/v1/admin/audit (BEP-45). |
 | NF-001 | TC-PERF-01 | A | p90 1.3218 s at 50 concurrent users (docs/perf-sprint1.md). |
 | NF-002 | TC-OPS-01 | N | Measurement window closes 7 Nov 2026 (BEP-35). |
 | NF-003 | TC-UX-01 | N | Partially verified; click count and keyboard checks outstanding. |
@@ -71,11 +71,11 @@ Partially executed requirements remain N until all applicable tests are complete
 | SR-006 | TC-SEC-06 | A | Throttling at the API returns 429 with Retry-After after five failures. |
 | SR-007 | TC-SEC-07 | A | Contact is disclosed only to participants of an active exchange; cancellation revokes it. |
 
-Summary: 26 Accepted, 1 Failed, 4 Not Run, of 31 requirements.
+Summary: 27 Accepted, 0 Failed, 4 Not Run, of 31 requirements.
 
 ## 4. Test Case Results
 
-Executed on `653560e` (backend suite: 172 tests passed, statement coverage 94.6%, branch coverage 83.9%, combined 92.6%; system validation 28/28 passed on a local PostgreSQL stack). Reports: `docs/unit-test-report.md`, `docs/coverage-report.md`, `docs/branch-coverage-report.md`, `docs/system-validation-report.md`, `docs/perf-sprint1.md`, `docs/perf-sprint2.md`, `docs/tls-uptime-sprint2.md`.
+Executed on `b3b9eec` (backend suite: 177 tests passed, statement coverage 94.8%, branch coverage 83.7%, combined 92.7%; system validation 28/28 passed on a local PostgreSQL stack, 6 Nov 2026). Reports: `docs/unit-test-report.md`, `docs/coverage-report.md`, `docs/branch-coverage-report.md`, `docs/system-validation-report.md`, `docs/perf-sprint1.md`, `docs/perf-sprint2.md`, `docs/tls-uptime-sprint2.md`.
 
 | Test case | Requirement | Result | Evidence |
 |---|---|---|---|
@@ -107,7 +107,7 @@ Executed on `653560e` (backend suite: 172 tests passed, statement coverage 94.6%
 | TC-HIS-01 | F-030 | Pass | test_exchanges.py::test_exchange_history_* (6 tests); system validation step 26 |
 | TC-RAT-01 | F-031 | Pass | test_ratings.py (rate after return, before return rejected, duplicate, range, non-integer, outsider, anonymous, average recomputed); the ratee is derived from the exchange and the database forbids rater = ratee |
 | TC-ADM-01 | F-040 | Pass | test_admin.py (deactivate with reason, hide listing, student 403, missing reason 422, deactivated user's token revoked) |
-| TC-ADM-02 | F-040 | FAIL | No endpoint exists to read the audit log (only writes). Tracked as BEP-45; see Test Plan v1.1 section 4. |
+| TC-ADM-02 | F-040 | Pass | test_admin.py (admin 200 with items and total, student 403, anonymous 401, only allowed fields exposed, pagination and newest first); BEP-45, PR #72 |
 | TC-SEC-01 | SR-001 | Pass | test_auth_register.py (bcrypt hash stored, no hash in response); test_security_evidence.py::test_tc_sec_01_*. Log capture check not automated. |
 | TC-SEC-02 | SR-002 | Pass | test_auth_login.py and test_auth_logout.py (tampered, wrong secret, expired, stale version); test_security_evidence.py (alg none, garbage token, missing token, inactive user) |
 | TC-SEC-03 | SR-003 | Pass | docs/tls-uptime-sprint2.md: SSL Labs grade A, TLS 1.2 and 1.3 only, HTTP opens on HTTPS, no secrets in repo; test_security_evidence.py::test_tc_sec_03_cors_allows_configured_origin_only |
@@ -122,7 +122,7 @@ Executed on `653560e` (backend suite: 172 tests passed, statement coverage 94.6%
 | TC-CI-01 | NF-004 | Not run | CI gates are active (PRs waited for the three required checks; coverage gate 70%, overall 93%). The deliberate failing-branch demonstration has not been run. |
 | TC-PORT-01 | NF-006 | Not run | Fresh-clone docker compose run not yet recorded. |
 
-Totals: 37 Pass, 1 Fail, 4 Not run (42 test cases).
+Totals: 38 Pass, 0 Fail, 4 Not run (42 test cases).
 
 ## 5. Deployment and CI Evidence
 
@@ -135,7 +135,7 @@ Totals: 37 Pass, 1 Fail, 4 Not run (42 test cases).
 | Deployment path | Merge to `main`, CI passes, deploy hook triggers Render, `/health` checked |
 | Live API contains Sprint 2 endpoints | Observed 5 Nov 2026 (exchanges, ratings, return, admin) |
 | Required PR checks | backend (lint, tests, migrations), frontend (build), docker (build images) |
-| Coverage gate | >= 70% (measured 92.6% combined, branch coverage on) |
+| Coverage gate | >= 70% (measured 92.7% combined, branch coverage on) |
 
 ## 6. Manual Verification Summary
 
@@ -160,7 +160,6 @@ The following behaviours were observed on the deployed application on 31 October
 ## 7. Outstanding Verification
 | Item | Owner | When |
 |---|---|---|
-| TC-ADM-02: build the audit read endpoint (BEP-45) and re-run | Abhiram | Before the 7 Nov freeze, otherwise record as a deviation |
 | TC-OPS-01: UptimeRobot export for 2-7 Nov, fill the table (BEP-35) | Nishkal | 7 Nov |
 | TC-UX-01: click counts, keyboard access, error readability at 360px | Team (record screenshots) | Before 7 Nov |
 | TC-CI-01: push a deliberately failing branch and show the gate blocking merge | Nishkal | Before 7 Nov |
@@ -198,8 +197,8 @@ This document is a working verification record and does not represent final proj
 
 | Review Item | Status |
 |---|---|
-| RTM prepared | Done (v1.1, 5 Nov 2026) |
-| Test execution recorded | In Progress (4 not run, 1 failed) |
+| RTM prepared | Done (v1.1, 6 Nov 2026) |
+| Test execution recorded | In Progress (4 not run, 0 failed) |
 | Evidence reviewed | Pending |
 | Team review | Pending |
 | Final acceptance | Pending |
