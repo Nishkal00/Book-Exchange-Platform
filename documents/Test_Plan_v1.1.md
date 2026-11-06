@@ -5,8 +5,8 @@
 | Field | Value |
 |---|---|
 | Version | 1.1 (supersedes v1.0 of 27 October 2026) |
-| Date | 5 November 2026 |
-| Code commit tested | `653560e` (main) |
+| Date | 6 November 2026 |
+| Code commit tested | `b3b9eec` (main) |
 | Related | `documents/RTM.md` v1.1, `documents/DEVIATIONS.md` |
 
 ## 1. Change log from v1.0
@@ -25,12 +25,12 @@
 
 | Item | Result |
 |---|---|
-| Backend automated tests | 172 passed, 0 failed |
-| Statement coverage | 94.6% (gate 70%) |
-| Branch coverage | 83.9% (260 of 310 branches); combined statement and branch 92.6% |
+| Backend automated tests | 177 passed, 0 failed |
+| Statement coverage | 94.8% (gate 70%) |
+| Branch coverage | 83.7% (261 of 312 branches); combined statement and branch 92.7% |
 | System validation | 28 of 28 checks passed |
-| Test cases | 37 Pass, 1 Fail, 4 Not run (of 42) |
-| Requirements | 26 Accepted, 1 Failed (F-040), 4 Not run (NF-002, NF-003, NF-004, NF-006) |
+| Test cases | 38 Pass, 0 Fail, 4 Not run (of 42) |
+| Requirements | 27 Accepted, 0 Failed, 4 Not run (NF-002, NF-003, NF-004, NF-006) |
 
 ## 3. Execution record
 
@@ -64,7 +64,7 @@
 | TC-HIS-01 | F-030 | Pass | test_exchanges.py::test_exchange_history_* (6 tests); system validation step 26 |
 | TC-RAT-01 | F-031 | Pass | test_ratings.py (rate after return, before return rejected, duplicate, range, non-integer, outsider, anonymous, average recomputed); the ratee is derived from the exchange and the database forbids rater = ratee |
 | TC-ADM-01 | F-040 | Pass | test_admin.py (deactivate with reason, hide listing, student 403, missing reason 422, deactivated user's token revoked) |
-| TC-ADM-02 | F-040 | FAIL | No endpoint exists to read the audit log (only writes). Tracked as BEP-45; see Test Plan v1.1 section 4. |
+| TC-ADM-02 | F-040 | Pass | test_admin.py (admin 200 with items and total, student 403, anonymous 401, only allowed fields exposed, pagination and newest first); BEP-45, PR #72 |
 | TC-SEC-01 | SR-001 | Pass | test_auth_register.py (bcrypt hash stored, no hash in response); test_security_evidence.py::test_tc_sec_01_*. Log capture check not automated. |
 | TC-SEC-02 | SR-002 | Pass | test_auth_login.py and test_auth_logout.py (tampered, wrong secret, expired, stale version); test_security_evidence.py (alg none, garbage token, missing token, inactive user) |
 | TC-SEC-03 | SR-003 | Pass | docs/tls-uptime-sprint2.md: SSL Labs grade A, TLS 1.2 and 1.3 only, HTTP opens on HTTPS, no secrets in repo; test_security_evidence.py::test_tc_sec_03_cors_allows_configured_origin_only |
@@ -83,7 +83,7 @@
 
 | Item | Detail | Action |
 |---|---|---|
-| TC-ADM-02 (Fail) | Audit rows are written on deactivate and hide, but no endpoint reads them | BEP-45 (Abhiram): `GET /api/v1/admin/audit`, admin 200, student 403, pagination |
+| TC-ADM-02 | Failed on 5 Nov (no endpoint to read the audit log); fixed by BEP-45 (PR #72) and re-run on 6 Nov: Pass | Closed |
 | TC-OPS-01 (Not run) | Uptime window 2 to 7 Nov still open | Export UptimeRobot report on 7 Nov (BEP-35) |
 | TC-UX-01 (Not run) | Click count, keyboard access and error readability not recorded | Record with screenshots before 7 Nov |
 | TC-CI-01 (Not run) | No deliberate failing-branch run | Run once and screenshot the blocked PR |
@@ -95,7 +95,7 @@ These are in addition to those in `documents/DEVIATIONS.md` v1.0 and are to be m
 
 | ID | Deviation | Impact |
 |---|---|---|
-| DEV-03 | No endpoint to read the audit log (until BEP-45) | TC-ADM-02 fails |
+| DEV-03 | No endpoint to read the audit log existed until BEP-45 (PR #72, 6 Nov) | Resolved; TC-ADM-02 now passes |
 | DEV-04 | Extra endpoints `GET /api/v1/requests` and `GET /api/v1/matches` beyond SAD v1.0 | Needed by the Requests screen; additive |
 | DEV-05 | Cancelling an exchange before handover reopens the borrow request to OPEN | Design choice, listing returns to AVAILABLE |
 | DEV-06 | HSTS header not sent by the backend or the static host | TLS grade A is unaffected; optional hardening |
@@ -106,4 +106,4 @@ These are in addition to those in `documents/DEVIATIONS.md` v1.0 and are to be m
 
 1. All Sprint 2 pull requests merged and reviewed.
 2. `generate_test_reports.py` and `system_validation.py` re-run on the final commit.
-3. RTM statuses updated for TC-ADM-02 and the four Not run cases, or each recorded as a deviation.
+3. RTM statuses updated for the four Not run cases, or each recorded as a deviation.

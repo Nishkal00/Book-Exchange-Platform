@@ -2,16 +2,16 @@
 
 | Item | Value |
 | :--- | :--- |
-| Generated | 05 Nov 2026 21:51 |
-| Commit | `ba0e726 (+ uncommitted changes)` |
-| Python | 3.13.7 on Windows |
+| Generated | 06 Nov 2026 18:01 |
+| Commit | `b3b9eec` |
+| Python | 3.13.17 on Linux |
 | Command | `python scripts/generate_test_reports.py` (runs `pytest` in `backend/`) |
 
 ## Summary
 
 | Total | Passed | Failed | Skipped | Duration |
 | ---: | ---: | ---: | ---: | ---: |
-| 172 | 172 | 0 | 0 | 24.6 s |
+| 177 | 177 | 0 | 0 | 29.9 s |
 
 Database: in-memory SQLite for unit tests. PostgreSQL-only behaviour is exercised by the
 CI migration step against a real PostgreSQL service.
@@ -20,7 +20,7 @@ CI migration step against a real PostgreSQL service.
 
 | Test file | Tests | Passed | Failed | Skipped |
 | :--- | ---: | ---: | ---: | ---: |
-| `tests/test_admin.py` | 8 | 8 | 0 | 0 |
+| `tests/test_admin.py` | 13 | 13 | 0 | 0 |
 | `tests/test_auth_login.py` | 7 | 7 | 0 | 0 |
 | `tests/test_auth_logout.py` | 8 | 8 | 0 | 0 |
 | `tests/test_auth_register.py` | 3 | 3 | 0 | 0 |

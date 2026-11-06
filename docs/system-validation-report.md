@@ -2,7 +2,7 @@
 
 | Item | Value |
 | :--- | :--- |
-| Date | 04 Nov 2026 14:52 |
+| Date | 06 Nov 2026 18:00 |
 | Target | `http://localhost:8001` |
 | Method | `python backend/scripts/system_validation.py` (public API only, fresh users) |
 | Result | **28 of 28 checks passed** |
@@ -23,7 +23,7 @@
 | 10 | Lender receives a match notification | F-023 | TC-NOT-01 | MATCH_FOUND | ['MATCH_FOUND'] | PASS |
 | 11 | Match list shows no contact details | SR-007 | TC-SEC-07 | no email/phone fields | none | PASS |
 | 12 | Outsider cannot decide a match | SR-005 | TC-SEC-05 | 403 | 403 | PASS |
-| 13 | Mutual acceptance creates an exchange | F-024 | TC-MAT-04 | exchangeId set | 36 | PASS |
+| 13 | Mutual acceptance creates an exchange | F-024 | TC-MAT-04 | exchangeId set | 1 | PASS |
 | 14 | Outsider cannot read partner contact | SR-007 | TC-SEC-07 | 403 or 404 | 403 | PASS |
 | 15 | Participant can read partner contact after acceptance | SR-007 | TC-SEC-07 | 200 + email | 200 | PASS |
 | 16 | Handover needs a due date | F-025 | TC-EXC-01 | 409 | 409 | PASS |

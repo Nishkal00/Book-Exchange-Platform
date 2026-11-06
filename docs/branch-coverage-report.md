@@ -2,16 +2,16 @@
 
 | Item | Value |
 | :--- | :--- |
-| Generated | 05 Nov 2026 21:51 |
-| Commit | `ba0e726 (+ uncommitted changes)` |
-| Python | 3.13.7 on Windows |
+| Generated | 06 Nov 2026 18:01 |
+| Commit | `b3b9eec` |
+| Python | 3.13.17 on Linux |
 | Command | `python scripts/generate_test_reports.py` (runs `pytest` in `backend/`) |
 
 ## Summary
 
 | Branches | Covered | Partially or not covered | Branch coverage |
 | ---: | ---: | ---: | ---: |
-| 310 | 260 | 50 | **83.9%** |
+| 312 | 261 | 51 | **83.7%** |
 
 Branch coverage is switched on with `branch = true` in `backend/pyproject.toml`.
 
@@ -21,7 +21,7 @@ Branch coverage is switched on with `branch = true` in `backend/pyproject.toml`.
 | :--- | ---: | ---: | ---: | ---: |
 | `app/config.py` | 4 | 4 | 0 | 100% |
 | `app/login_rate_limit.py` | 10 | 10 | 0 | 100% |
-| `app/routers/admin.py` | 8 | 5 | 3 | 62% |
+| `app/routers/admin.py` | 10 | 6 | 4 | 60% |
 | `app/routers/auth.py` | 42 | 36 | 6 | 86% |
 | `app/routers/exchanges.py` | 52 | 47 | 5 | 90% |
 | `app/routers/listings.py` | 58 | 48 | 10 | 83% |
