@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Version | 1.1 (supersedes v1.0 of 27 October 2026) |
-| Date | 6 November 2026 |
+| Date | 6 November 2026, updated 7 November 2026 |
 | Code commit tested | `b3b9eec` (main) |
 | Related | `documents/RTM.md` v1.1, `documents/DEVIATIONS.md` |
 
@@ -29,8 +29,8 @@
 | Statement coverage | 94.8% (gate 70%) |
 | Branch coverage | 83.7% (261 of 312 branches); combined statement and branch 92.7% |
 | System validation | 28 of 28 checks passed |
-| Test cases | 38 Pass, 0 Fail, 4 Not run (of 42) |
-| Requirements | 27 Accepted, 0 Failed, 4 Not run (NF-002, NF-003, NF-004, NF-006) |
+| Test cases | 41 Pass, 0 Fail, 1 Not run (of 42) |
+| Requirements | 30 Accepted, 0 Failed, 1 Not run (NF-006) |
 
 ## 3. Execution record
 
@@ -74,20 +74,20 @@
 | TC-SEC-07 | SR-007 | Pass | test_match_decision.py::test_tc_sec_07_* (4 tests); test_match_list.py; test_exchanges.py contact tests; system validation steps 11, 14, 15 |
 | TC-PERF-01 | NF-001 | Pass | docs/perf-sprint1.md: p90 1.3218 s (target <= 2 s), 0 errors, 50 users |
 | TC-PERF-02 | NF-005 | Pass | docs/perf-sprint2.md: p95 1.3594 s (target <= 2 s), 1,000 requests, 10,000 listings, 0 fatal errors |
-| TC-OPS-01 | NF-002 | Not run | The 2-7 Nov measurement window is still open. Export the UptimeRobot report on 7 Nov and fill docs/tls-uptime-sprint2.md (BEP-35). |
-| TC-UX-01 | NF-003 | Not run | 360px layout verified on 31 Oct. Click count (<= 5 for create listing and search), keyboard access and error readability not yet recorded. |
-| TC-CI-01 | NF-004 | Not run | CI gates are active (PRs waited for the three required checks; coverage gate 70%, overall 93%). The deliberate failing-branch demonstration has not been run. |
-| TC-PORT-01 | NF-006 | Not run | Fresh-clone docker compose run not yet recorded. |
+| TC-OPS-01 | NF-002 | Pass | docs/tls-uptime-sprint2.md: 99.33% for 2 Nov 00:00 to 7 Nov 19:39 IST (target >= 99%), one disclosed 503 outage on 4 Nov (55 min 53 s); docs/uptime-export.csv, docs/uptime-1.png, docs/uptime-2.png (BEP-35) |
+| TC-UX-01 | NF-003 | Pass | docs/ux-evidence-sprint2.md with screenshots in docs/ux-evidence/: no horizontal scroll on 9 views at 360px, create listing 3 clicks, search 2 clicks (limit 5), all inputs labelled, keyboard sign-in works, errors readable (BEP-50). Run on a local build of main 46c729c, Chromium only. |
+| TC-CI-01 | NF-004 | Pass | docs/ci-gate-evidence-sprint2.md with screenshots in docs/ci-gate-evidence/: throwaway PR #76 with a deliberate failing test turned backend red (docker and deploy skipped), the restore commit turned all required checks green, PR #76 closed without merging; review gate shown on PR #75 (BEP-51) |
+| TC-PORT-01 | NF-006 | Not run | Fresh clone and `docker compose up --build` were not run: Docker was not available to the team before the deadline. Suspected port mismatch recorded as DEV-09 and DEV-10. |
 
 ## 4. Failures and open items
 
 | Item | Detail | Action |
 |---|---|---|
 | TC-ADM-02 | Failed on 5 Nov (no endpoint to read the audit log); fixed by BEP-45 (PR #72) and re-run on 6 Nov: Pass | Closed |
-| TC-OPS-01 (Not run) | Uptime window 2 to 7 Nov still open | Export UptimeRobot report on 7 Nov (BEP-35) |
-| TC-UX-01 (Not run) | Click count, keyboard access and error readability not recorded | Record with screenshots before 7 Nov |
-| TC-CI-01 (Not run) | No deliberate failing-branch run | Run once and screenshot the blocked PR |
-| TC-PORT-01 (Not run) | Fresh-clone docker compose not recorded | Run on a clean machine |
+| TC-OPS-01 | Was Not run; passed on 7 Nov with 99.33% availability | Closed (BEP-35) |
+| TC-UX-01 | Was Not run; passed on 7 Nov | Closed (BEP-50) |
+| TC-CI-01 | Was Not run; passed on 7 Nov | Closed (BEP-51) |
+| TC-PORT-01 (Not run) | Fresh-clone docker compose not run; Docker unavailable to the team | Carry to the next sprint (DEV-10) |
 
 ## 5. Deviations found during execution
 
@@ -99,11 +99,14 @@ These are in addition to those in `documents/DEVIATIONS.md` v1.0 and are to be m
 | DEV-04 | Extra endpoints `GET /api/v1/requests` and `GET /api/v1/matches` beyond SAD v1.0 | Needed by the Requests screen; additive |
 | DEV-05 | Cancelling an exchange before handover reopens the borrow request to OPEN | Design choice, listing returns to AVAILABLE |
 | DEV-06 | HSTS header not sent by the backend or the static host | TLS grade A is unaffected; optional hardening |
-| DEV-07 | Jira used for backlog and board instead of a GitHub Project | Pending BEP-43 part 2 (link or instructor confirmation) |
+| DEV-07 | Jira used for backlog and board; a GitHub Project mirror was added and linked in the README (PR #71) | Resolved |
 | DEV-08 | Automated frontend tests not written (TEST-01 in v1.0 remains) | Frontend verified manually and by an end-to-end browser run |
+| DEV-09 | `docker-compose.yml` maps the backend to host port 8001 while the README, `.env.example` and the frontend default expect the API at `localhost:8000` | Suspected, not yet confirmed by running compose: a default compose run may leave the UI unable to reach the API. Proposed fix: map `8000:8000` (needs its own card and reviewed PR) |
+| DEV-10 | TC-PORT-01 not run | NF-006 stays Not Run; carried to the next sprint |
+| DEV-11 | Usability observations from TC-UX-01: server wording "Value error," shown in the password error; input focus indicator is a border colour and soft glow; colour contrast not measured; Chromium only | Does not fail NF-003; listed for improvement |
 
 ## 6. Exit criteria for the final run
 
 1. All Sprint 2 pull requests merged and reviewed.
 2. `generate_test_reports.py` and `system_validation.py` re-run on the final commit.
-3. RTM statuses updated for the four Not run cases, or each recorded as a deviation.
+3. RTM statuses updated for the four Not run cases, or each recorded as a deviation. Done on 7 Nov 2026: three passed with evidence; TC-PORT-01 is recorded as DEV-10.

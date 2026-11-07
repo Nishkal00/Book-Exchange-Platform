@@ -7,8 +7,8 @@
 |---|---|
 | Project | Book Exchange Platform |
 | Document | Requirements Traceability Matrix |
-| Version | 1.1 |
-| Date | 6 November 2026 |
+| Version | 1.2 |
+| Date | 7 November 2026 |
 | Source Documents | SRS v1.0, SAD v1.0, Test Plan v1.1 |
 | Deployment | Render |
 | Verified Code Commit | `b3b9eec` (main, 6 Nov 2026) |
@@ -58,11 +58,11 @@ Partially executed requirements remain N until all applicable tests are complete
 | F-031 | TC-RAT-01 | A | Rating is submitted for the partner of a RETURNED exchange; averages recomputed. |
 | F-040 | TC-ADM-01, TC-ADM-02 | A | Deactivate and hide write audit rows; admins read them through GET /api/v1/admin/audit (BEP-45). |
 | NF-001 | TC-PERF-01 | A | p90 1.3218 s at 50 concurrent users (docs/perf-sprint1.md). |
-| NF-002 | TC-OPS-01 | N | Measurement window closes 7 Nov 2026 (BEP-35). |
-| NF-003 | TC-UX-01 | N | Partially verified; click count and keyboard checks outstanding. |
-| NF-004 | TC-CI-01 | N | CI gates observed on every PR; deliberate negative-gate run outstanding. |
+| NF-002 | TC-OPS-01 | A | 99.33% availability, 2 Nov to 7 Nov 19:39 IST (target 99%); one 503 outage of 55 min 53 s on 4 Nov disclosed (docs/tls-uptime-sprint2.md, BEP-35). |
+| NF-003 | TC-UX-01 | A | 360px: no horizontal scroll on 9 views; create listing 3 clicks, search 2 clicks; labelled inputs; keyboard sign-in; readable errors (docs/ux-evidence-sprint2.md, BEP-50). |
+| NF-004 | TC-CI-01 | A | Deliberate failing test turned the required backend check red and fixing it restored green; docker and deploy did not run on the PR (docs/ci-gate-evidence-sprint2.md, BEP-51). |
 | NF-005 | TC-PERF-02 | A | p95 1.3594 s (docs/perf-sprint2.md). |
-| NF-006 | TC-PORT-01 | N | Fresh-clone run outstanding. |
+| NF-006 | TC-PORT-01 | N | Not run: Docker was not available to the team before the Sprint 2 deadline. Recorded as DEV-10 in DEVIATIONS.md. |
 | SR-001 | TC-SEC-01 | A | All linked test cases pass (see section 4). |
 | SR-002 | TC-AUTH-05, TC-AUTH-06, TC-SEC-02 | A | All linked test cases pass (see section 4). |
 | SR-003 | TC-SEC-03 | A | SSL Labs grade A; TLS 1.2 and 1.3; CORS limited to the frontend; no secrets in the repository. HSTS header not sent (SEC-01, optional). |
@@ -71,11 +71,11 @@ Partially executed requirements remain N until all applicable tests are complete
 | SR-006 | TC-SEC-06 | A | Throttling at the API returns 429 with Retry-After after five failures. |
 | SR-007 | TC-SEC-07 | A | Contact is disclosed only to participants of an active exchange; cancellation revokes it. |
 
-Summary: 27 Accepted, 0 Failed, 4 Not Run, of 31 requirements.
+Summary: 30 Accepted, 0 Failed, 1 Not Run (NF-006), of 31 requirements.
 
 ## 4. Test Case Results
 
-Executed on `b3b9eec` (backend suite: 177 tests passed, statement coverage 94.8%, branch coverage 83.7%, combined 92.7%; system validation 28/28 passed on a local PostgreSQL stack, 6 Nov 2026). Reports: `docs/unit-test-report.md`, `docs/coverage-report.md`, `docs/branch-coverage-report.md`, `docs/system-validation-report.md`, `docs/perf-sprint1.md`, `docs/perf-sprint2.md`, `docs/tls-uptime-sprint2.md`.
+Executed on `b3b9eec` (backend suite: 177 tests passed, statement coverage 94.8%, branch coverage 83.7%, combined 92.7%; system validation 28/28 passed on a local PostgreSQL stack, 6 Nov 2026). Reports: `docs/unit-test-report.md`, `docs/coverage-report.md`, `docs/branch-coverage-report.md`, `docs/system-validation-report.md`, `docs/perf-sprint1.md`, `docs/perf-sprint2.md`, `docs/tls-uptime-sprint2.md`, `docs/ux-evidence-sprint2.md`, `docs/ci-gate-evidence-sprint2.md`.
 
 | Test case | Requirement | Result | Evidence |
 |---|---|---|---|
@@ -117,12 +117,12 @@ Executed on `b3b9eec` (backend suite: 177 tests passed, statement coverage 94.8%
 | TC-SEC-07 | SR-007 | Pass | test_match_decision.py::test_tc_sec_07_* (4 tests); test_match_list.py; test_exchanges.py contact tests; system validation steps 11, 14, 15 |
 | TC-PERF-01 | NF-001 | Pass | docs/perf-sprint1.md: p90 1.3218 s (target <= 2 s), 0 errors, 50 users |
 | TC-PERF-02 | NF-005 | Pass | docs/perf-sprint2.md: p95 1.3594 s (target <= 2 s), 1,000 requests, 10,000 listings, 0 fatal errors |
-| TC-OPS-01 | NF-002 | Not run | The 2-7 Nov measurement window is still open. Export the UptimeRobot report on 7 Nov and fill docs/tls-uptime-sprint2.md (BEP-35). |
-| TC-UX-01 | NF-003 | Not run | 360px layout verified on 31 Oct. Click count (<= 5 for create listing and search), keyboard access and error readability not yet recorded. |
-| TC-CI-01 | NF-004 | Not run | CI gates are active (PRs waited for the three required checks; coverage gate 70%, overall 93%). The deliberate failing-branch demonstration has not been run. |
-| TC-PORT-01 | NF-006 | Not run | Fresh-clone docker compose run not yet recorded. |
+| TC-OPS-01 | NF-002 | Pass | docs/tls-uptime-sprint2.md: 99.33% for 2 Nov 00:00 to 7 Nov 19:39 IST (target >= 99%), one disclosed 503 outage on 4 Nov (55 min 53 s); docs/uptime-export.csv, docs/uptime-1.png, docs/uptime-2.png (BEP-35) |
+| TC-UX-01 | NF-003 | Pass | docs/ux-evidence-sprint2.md with screenshots in docs/ux-evidence/: no horizontal scroll on 9 views at 360px, create listing 3 clicks, search 2 clicks (limit 5), all inputs labelled, keyboard sign-in works, errors readable (BEP-50). Run on a local build of main 46c729c, Chromium only. |
+| TC-CI-01 | NF-004 | Pass | docs/ci-gate-evidence-sprint2.md with screenshots in docs/ci-gate-evidence/: throwaway PR #76 with a deliberate failing test turned backend red (docker and deploy skipped), the restore commit turned all required checks green, PR #76 closed without merging; review gate shown on PR #75 (BEP-51) |
+| TC-PORT-01 | NF-006 | Not run | Fresh clone and `docker compose up --build` were not run: Docker was not available to the team before the deadline. A suspected port mismatch (compose maps the backend to host port 8001, documentation and the frontend expect 8000) is recorded as DEV-09 and DEV-10. |
 
-Totals: 38 Pass, 0 Fail, 4 Not run (42 test cases).
+Totals: 41 Pass, 0 Fail, 1 Not run (42 test cases).
 
 ## 5. Deployment and CI Evidence
 
@@ -158,13 +158,14 @@ The following behaviours were observed on the deployed application on 31 October
 15. Browser measurement returned a document width of 360px and no horizontal overflow.
 
 ## 7. Outstanding Verification
-| Item | Owner | When |
+
+| Item | Owner | Status on 7 Nov 2026 |
 |---|---|---|
-| TC-OPS-01: UptimeRobot export for 2-7 Nov, fill the table (BEP-35) | Nishkal | 7 Nov |
-| TC-UX-01: click counts, keyboard access, error readability at 360px | Team (record screenshots) | Before 7 Nov |
-| TC-CI-01: push a deliberately failing branch and show the gate blocking merge | Nishkal | Before 7 Nov |
-| TC-PORT-01: fresh clone and `docker compose up --build` on a clean machine | Teammate | Before 7 Nov |
-| Re-run `generate_test_reports.py` and `system_validation.py` on the final commit, then update this RTM | Nishkal | After the last merge |
+| TC-OPS-01: UptimeRobot export for 2-7 Nov (BEP-35) | Nishkal | Done, Pass |
+| TC-UX-01: click counts, keyboard access, error readability at 360px (BEP-50) | Nishkal | Done, Pass |
+| TC-CI-01: deliberate failing branch and the blocked gate (BEP-51) | Nishkal | Done, Pass |
+| TC-PORT-01: fresh clone and `docker compose up --build` on a clean machine | Teammate | Not run; recorded in DEVIATIONS.md (DEV-10) and carried to the next sprint |
+| Re-run `generate_test_reports.py` and `system_validation.py` on the final commit, then update this RTM | Nishkal | Done in BEP-49 (PR #73) |
 
 ## 8. Evidence Management
 
@@ -197,8 +198,8 @@ This document is a working verification record and does not represent final proj
 
 | Review Item | Status |
 |---|---|
-| RTM prepared | Done (v1.1, 6 Nov 2026) |
-| Test execution recorded | In Progress (4 not run, 0 failed) |
+| RTM prepared | Done (v1.2, 7 Nov 2026) |
+| Test execution recorded | Done (41 pass, 1 not run, 0 failed) |
 | Evidence reviewed | Pending |
 | Team review | Pending |
 | Final acceptance | Pending |
