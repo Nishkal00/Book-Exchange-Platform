@@ -3,7 +3,7 @@
 | Requirement | Test case | Status |
 | :--- | :--- | :--- |
 | SR-003 (HTTPS, valid certificates, TLS 1.2+, CORS, no secrets in repo) | TC-SEC-03 | Verified 3 Nov 2026 (see section 1) |
-| NF-002 (>= 99% successful `/health` probes, 2-7 Nov, every 5 minutes) | TC-OPS-01 | **Pending: window closes 7 Nov 2026** (see section 2) |
+| NF-002 (>= 99% successful `/health` probes, 2-7 Nov, every 5 minutes) | TC-OPS-01 | **Pass:** 99.33% measured 2 to 7 Nov 2026 (see section 2) |
 
 ## 1. SR-003 / TC-SEC-03: Transport security
 
@@ -58,17 +58,19 @@ Limitation: browsers may upgrade the URL themselves, so this check does not prov
 - Count a probe as failed if it times out, returns non-200, or hits a cold start after sleep. The free Render tier sleeps after 15 minutes without traffic; the 5-minute monitor keeps the service awake, but any sleep or outage still counts as failure.
 - Disclose planned maintenance and gaps in measurement. This short-window target is not a monthly SLA.
 
-**Results (fill in on 7 Nov 2026, after the window closes)**
+**Results (measured 2 Nov 2026 00:00 to 7 Nov 2026 19:39 IST, the time of the export)**
 
 | Item | Value |
 | :--- | :--- |
-| Monitor start time | _TBD (take from UptimeRobot)_ |
-| Probes expected | _TBD_ |
-| Probes successful | _TBD_ |
-| Availability | _TBD %_ (target >= 99%) |
-| Outages / downtime log | _TBD_ |
-| Planned maintenance (deploys, restarts) | _TBD (list merge/deploy times from GitHub Actions)_ |
-| Missing measurements | _TBD_ |
-| Export attached | _TBD (UptimeRobot CSV or screenshot)_ |
+| Monitor start time | Before the window opened. The 30-day figure (99.464%) implies about 7.2 days of data, so monitoring began around 31 Oct 2026. Interval confirmed as 5 minutes on the dashboard ("Checked every 5m"). |
+| Probes expected | About 1,676 (502,680 s in the window divided by 300 s). Derived, not exported. |
+| Probes successful | About 1,665 (expected minus about 11 failed). Derived from the downtime below. |
+| Availability | 99.33% for the window (1 - 3,353 s / 502,680 s). Target >= 99%: met. The dashboard shows 99.446% for the last 7 days and 99.464% for the last 30 days. |
+| Outages / downtime log | One incident: 4 Nov 2026 20:47:52 to 21:43:45 IST, HTTP 503 Service Unavailable, 55 min 53 s (3,353 s), resolved without manual action recorded. No other incidents in the export. |
+| Planned maintenance (deploys, restarts) | No planned maintenance window was set in UptimeRobot. Every merge to `main` triggers a backend deploy, and 26 merges happened in the window. The merges nearest the outage were PR #31 (20:12 IST) and PR #32 (20:15 IST) on 4 Nov, about 32 minutes before it began. The cause of the 503 was not confirmed; a deploy or restart is a possible explanation but this is not proven. |
+| Missing measurements | None recorded. The incident export lists no monitoring gaps, and the figures are measured up to 19:39 IST on 7 Nov, not to the end of the day. |
+| Export attached | `docs/uptime-export.csv` (incident log), `docs/uptime-1.png` (monitor summary), `docs/uptime-2.png` (response time and latest incidents). |
 
-Status of NF-002 stays **Not Run** until this table is complete.
+Response time over the last 24 hours before the export: average 310 ms, minimum 221 ms, maximum 677 ms.
+
+Status of NF-002: **Pass** (99.33% against a target of 99%), with the single 503 outage disclosed above. The window was measured to 19:39 IST on 7 Nov 2026.
