@@ -25,15 +25,19 @@ Board snapshots (6 Nov 2026):
 ![BEP Sprint 2 board, Done column part 1](docs/github-project-board-2.png)
 ![BEP Sprint 2 board, Done column part 2](docs/github-project-board-3.png)
 ![BEP Sprint 2 board, Done column part 3](docs/github-project-board-4.png)
+![Burndown Chart - Sprint 1](documents/burndown-sprint1.png)
+![Burndown Chart - Sprint 2](documents/burndown-sprint2.png)
+
+
 
 ## Team
 
 | Member | Responsibility |
 | --- | --- |
-| Nishkal | Repository, Jira, DevOps, CI/CD and deployment |
-| Abhiram | Authentication and profile |
-| Manoj | Listings and search |
-| Ravish | UI, documentation and demonstration |
+| Nishkal - PES1UG24AM181 | Repository, Jira, DevOps, CI/CD and deployment |
+| Abhiram - PES1UG24AM151 | Authentication and profile |
+| Manoj - PES1UG24AM125 | Listings and search |
+| Ravish - PES1UG24AM127 | UI, documentation and demonstration |
 
 These roles reflect the confirmed swap and override the names in the supplied task-plan PDF.
 
